@@ -1,0 +1,7 @@
+{
+    "editor.formatOnSave": true,
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "markdown.extension.toc.levels": "2..4",
+}

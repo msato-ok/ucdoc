@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  ucscenario:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    image: ucscenario
+    volumes:
+      - .:/app:z
+      - /app/node_modules
+    working_dir: /app
+    command: /app/bin
