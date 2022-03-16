@@ -15,11 +15,7 @@ type SpawnOptions = RunOptions & {
   cwd: string;
 };
 
-type SpawnFunction<T> = (
-  execPath: string,
-  args: string[],
-  options: SpawnOptions
-) => T;
+type SpawnFunction<T> = (execPath: string, args: string[], options: SpawnOptions) => T;
 
 /**
  * Helper function to run CLI command in a given folder
@@ -37,12 +33,8 @@ export function runCLI(
   });
 }
 
-export const spawnScript: SpawnFunction<execa.ExecaSyncReturnValue> = (
-  execPath,
-  args,
-  options
-) => {
-  const result = execa.sync(execPath, args, getExecaOptions(options));
+export const spawnScript: SpawnFunction<execa.ExecaSyncReturnValue> = (execPath, args, options) => {
+  const result = execa.execaSync(execPath, args, getExecaOptions(options));
 
   handleTestFailure(execPath, options, result, args);
 

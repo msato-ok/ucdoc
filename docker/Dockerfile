@@ -8,8 +8,8 @@ ARG USERNAME=node
 # install some packages to use
 RUN apt-get update \
   && apt-get -y install --no-install-recommends \
-  # other
-  curl
+  curl \
+  vim
 
 # Create a non-root user to use if preferred - see https://aka.ms/vscode-remote/containers/non-root-user.
 RUN apt-get install --no-install-recommends -y \
