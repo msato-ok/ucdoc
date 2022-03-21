@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import * as cmd from './cmd';
-import * as spec from './spec';
+import * as parser from './parser';
 
 const packageJson = require('../package.json');
 const version: string = packageJson.version;
@@ -12,9 +12,11 @@ program.name('ucdoc').version(version);
 program
   .command('ucmd <file> [otherFiles...]')
   .description('generate use case description documents using markdown')
-  .action((file: string, otherFiles: string[]): void => {
-    const c = new cmd.UcmdSpecCommand();
-    executeCommand(file, otherFiles, c);
+  .requiredOption('-o, --output <directory>', 'output directory')
+  .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
+    const output = options['output'];
+    const command = new cmd.UcmdSpecCommand(output);
+    executeCommand(file, otherFiles, command);
   });
 
 // program
@@ -32,7 +34,7 @@ function executeCommand(file: string, otherFiles: string[], specCmd: cmd.SpecCom
     if (otherFiles) {
       files = [...files, ...otherFiles];
     }
-    const s = spec.parseSpec(files);
+    const s = parser.parse(files);
     specCmd.execute(s);
   } catch (e) {
     console.error(e);
