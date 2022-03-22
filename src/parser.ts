@@ -396,7 +396,8 @@ function replaceKeyword(data: IAppProps, app: spec.App): Map<string, Set<spec.Gl
         const index: number = matches['index'];
         const prefix = text.substring(0, index);
         const sufix = text.substring(index + matches[0].length);
-        text = `${prefix}${glossary.text}${sufix}`;
+        const replacement = `[${glossary.text}][]`;
+        text = `${prefix}${replacement}${sufix}`;
       } while (matches);
       if (name == 'playerId') {
         const actor = app.getActor(new spec.ActorId(val));

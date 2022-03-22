@@ -43,7 +43,11 @@ export class UcmdSpecCommand implements SpecCommand {
         backLinks.add(backLinkFlow.id.toString);
       }
     }
-    console.log({ backLinks: backLinks });
+    if (uc.glossaries) {
+      for (const g of uc.glossaries?.items) {
+        backLinks.add(g.id.toString);
+      }
+    }
     const data = {
       uc: uc,
       app: app,
@@ -109,7 +113,7 @@ export class UcmdSpecCommand implements SpecCommand {
 <% }); %>
 
 <%_ if (uc.glossaries) { %>
-## 用語
+## 関連資料
   <%_ uc.glossaries.categories.forEach((cat) => { %>
 - <%= cat.text %>
     <%_ uc.glossaries.byCategory(cat).forEach((glossary) => { %>
