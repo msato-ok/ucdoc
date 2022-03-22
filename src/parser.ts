@@ -21,12 +21,6 @@ interface IActorProps {
   name: string;
 }
 
-interface IGlossaryProps {
-  name: string;
-  category?: string;
-  desc?: string;
-}
-
 export interface IUseCaseProps {
   name: string;
   summary: string;
@@ -95,8 +89,9 @@ interface IScenarioProps {
 
 interface IGlossaryProps {
   name: string;
-  category?: string;
+  category: string;
   desc?: string;
+  url?: string;
 }
 
 export function parse(yamlFiles: string[]): spec.App {
@@ -110,24 +105,22 @@ export function parse(yamlFiles: string[]): spec.App {
   // ${xxx/yyy} のテキスト置換について補足
   // 最初に ${xxx/yyy} には関係なく、parseApp して参照先となるデータを作成して、
   // そのデータを使って、 data に対して、テキスト置換を行って、 再度 parseApp を実行することで、
-  // 置換後のテキストで app オブジェクトを作成すうｒ
+  // 置換後のテキストで app オブジェクトを作成する
   let app = parseApp(data);
-  data = replaceKeyword(data, app);
-  app = parseApp(data);
+  const ucGlossaries = replaceKeyword(data, app);
+  app = parseApp(data, ucGlossaries);
   return app;
 }
 
-function parseApp(data: IAppProps): spec.App {
+function parseApp(data: IAppProps, ucGlossaries?: Map<string, Set<spec.Glossary>>): spec.App {
   const actors: spec.Actor[] = parseActor(data);
-  const actorDic = new spec.EntityCache<spec.Actor>();
+  const actorDic = new spec.Cache<spec.Actor>();
   actorDic.addAll(actors);
 
-  const glossaries: spec.Glossary[] = parseGlossary(data);
-  const glossaryDic = new spec.EntityCache<spec.Glossary>();
-  glossaryDic.addAll(glossaries);
+  const glossaries: spec.GlossaryCollection = parseGlossary(data);
 
-  const usecases: spec.UseCase[] = parseUsecase(data, actorDic, glossaryDic);
-  const usecasesDic = new spec.EntityCache<spec.UseCase>();
+  const usecases: spec.UseCase[] = parseUsecase(data, actorDic, glossaries, ucGlossaries);
+  const usecasesDic = new spec.Cache<spec.UseCase>();
   usecasesDic.addAll(usecases);
 
   const scenarios: spec.Scenario[] = parseScenarios(data, usecasesDic);
@@ -135,17 +128,17 @@ function parseApp(data: IAppProps): spec.App {
   return new spec.App(actors, usecases, scenarios, glossaries);
 }
 
-function parseGlossary(data: IAppProps): spec.Glossary[] {
+function parseGlossary(data: IAppProps): spec.GlossaryCollection {
   const glossaries: spec.Glossary[] = [];
   for (const props of Object.values(data.glossaries)) {
     const o = new spec.Glossary(
       new spec.GlossaryId(props.name),
-      props.category ? new spec.GlossaryCategory(props.category) : undefined,
+      new spec.GlossaryCategory(props.category),
       props.desc ? new spec.Description(props.desc) : undefined
     );
     glossaries.push(o);
   }
-  return glossaries;
+  return new spec.GlossaryCollection(glossaries);
 }
 
 function parseActor(data: IAppProps): spec.Actor[] {
@@ -159,8 +152,9 @@ function parseActor(data: IAppProps): spec.Actor[] {
 
 function parseUsecase(
   data: IAppProps,
-  actorDic: spec.EntityCache<spec.Actor>,
-  glossaryDic: spec.EntityCache<spec.Glossary>
+  actorDic: spec.Cache<spec.Actor>,
+  glossaries: spec.GlossaryCollection,
+  ucGlossaries?: Map<string, Set<spec.Glossary>>
 ): spec.UseCase[] {
   const basePath = ['usecases'];
   const usecases: spec.UseCase[] = [];
@@ -172,24 +166,32 @@ function parseUsecase(
       path.concat(['basicFlows']),
       props.basicFlows,
       actorDic,
-      glossaryDic
+      glossaries
     );
-    const basicFlowDic = new spec.EntityCache<spec.Flow>();
+    const basicFlowDic = new spec.Cache<spec.Flow>();
     basicFlowDic.addAll(basicFlows);
     const alternateFlows: spec.AltExFlowCollection<spec.AlternateFlow> = parseAlternateFlows(
       path.concat(['alternateFlows']),
       props.alternateFlows,
       basicFlowDic,
       actorDic,
-      glossaryDic
+      glossaries
     );
     const exceptionFlows: spec.AltExFlowCollection<spec.ExceptionFlow> = parseExceptionFlows(
       path.concat(['exceptionFlows']),
       props.exceptionFlows,
       basicFlowDic,
       actorDic,
-      glossaryDic
+      glossaries
     );
+
+    let glossariesInUc = undefined;
+    if (ucGlossaries) {
+      const gset = ucGlossaries.get(id);
+      if (gset) {
+        glossariesInUc = new spec.GlossaryCollection(Array.from(gset));
+      }
+    }
 
     usecases.push(
       new spec.UseCase(
@@ -200,7 +202,8 @@ function parseUsecase(
         postConditions,
         new spec.FlowCollection(basicFlows),
         alternateFlows,
-        exceptionFlows
+        exceptionFlows,
+        glossariesInUc
       )
     );
   }
@@ -227,8 +230,8 @@ function parsePrePostCondition<T extends spec.PrePostCondition>(
 function parseBasicFlows(
   path: string[],
   flowPropsArray: Record<string, IFlowProps>,
-  actorDic: spec.EntityCache<spec.Actor>,
-  glossaryDic: spec.EntityCache<spec.Glossary>
+  actorDic: spec.Cache<spec.Actor>,
+  glossaries: spec.GlossaryCollection
 ): spec.Flow[] {
   if (!flowPropsArray) {
     const errPathText = path.join('/');
@@ -239,7 +242,7 @@ function parseBasicFlows(
     const currPath = path.concat([id]);
     let player: spec.Actor | spec.Glossary | undefined = actorDic.get(new spec.ActorId(props.playerId));
     if (!player) {
-      player = glossaryDic.get(new spec.GlossaryId(props.playerId));
+      player = glossaries.get(new spec.GlossaryId(props.playerId));
     }
     if (!player) {
       const errPathText = currPath.concat(['playerId']).join('/');
@@ -256,9 +259,9 @@ function parseBasicFlows(
 function parseAlternateFlows(
   path: string[],
   flowPropsArray: Record<string, IAlternateFlowProps>,
-  basicFlowDic: spec.EntityCache<spec.Flow>,
-  actorDic: spec.EntityCache<spec.Actor>,
-  glossaryDic: spec.EntityCache<spec.Glossary>
+  basicFlowDic: spec.Cache<spec.Flow>,
+  actorDic: spec.Cache<spec.Actor>,
+  glossaries: spec.GlossaryCollection
 ): spec.AltExFlowCollection<spec.AlternateFlow> {
   const flows: spec.AlternateFlow[] = [];
   if (flowPropsArray) {
@@ -273,7 +276,7 @@ function parseAlternateFlows(
         }
         sourceFlows.push(flow);
       }
-      const nextFlows = parseBasicFlows(path.concat(['nextFlows']), props.nextFlows, actorDic, glossaryDic);
+      const nextFlows = parseBasicFlows(path.concat(['nextFlows']), props.nextFlows, actorDic, glossaries);
       const returnFlow = basicFlowDic.get(new spec.FlowId(props.returnFlowId));
       if (!returnFlow) {
         const errPathText = currPath.concat(['returnFlow']).join('/');
@@ -295,9 +298,9 @@ function parseAlternateFlows(
 function parseExceptionFlows(
   path: string[],
   flowPropsArray: Record<string, IExceptionFlowProps>,
-  basicFlowDic: spec.EntityCache<spec.Flow>,
-  actorDic: spec.EntityCache<spec.Actor>,
-  glossaryDic: spec.EntityCache<spec.Glossary>
+  basicFlowDic: spec.Cache<spec.Flow>,
+  actorDic: spec.Cache<spec.Actor>,
+  glossaries: spec.GlossaryCollection
 ): spec.AltExFlowCollection<spec.ExceptionFlow> {
   const flows: spec.ExceptionFlow[] = [];
   if (flowPropsArray) {
@@ -312,7 +315,7 @@ function parseExceptionFlows(
         }
         sourceFlows.push(flow);
       }
-      const nextFlows = parseBasicFlows(currPath.concat(['nextFlows']), props.nextFlows, actorDic, glossaryDic);
+      const nextFlows = parseBasicFlows(currPath.concat(['nextFlows']), props.nextFlows, actorDic, glossaries);
       const flow = new spec.ExceptionFlow(
         new spec.ExceptionFlowId(id),
         new spec.Description(props.description),
@@ -325,7 +328,7 @@ function parseExceptionFlows(
   return new spec.AltExFlowCollection<spec.ExceptionFlow>(flows);
 }
 
-function parseScenarios(data: IAppProps, usecasesDic: spec.EntityCache<spec.UseCase>): spec.Scenario[] {
+function parseScenarios(data: IAppProps, usecasesDic: spec.Cache<spec.UseCase>): spec.Scenario[] {
   const sescenarios: spec.Scenario[] = [];
   const path = ['scenarios'];
   if (data.scenarios) {
@@ -352,7 +355,8 @@ function parseScenarios(data: IAppProps, usecasesDic: spec.EntityCache<spec.UseC
   return sescenarios;
 }
 
-function replaceKeyword(data: IAppProps, app: spec.App): IAppProps {
+function replaceKeyword(data: IAppProps, app: spec.App): Map<string, Set<spec.Glossary>> {
+  const ucGlossaries = new Map<string, Set<spec.Glossary>>();
   // ${xxx/yyy} を探して置換する
   const regexp = /\$\{([^${}]+)\}/;
   spec.walkProps(
@@ -372,41 +376,63 @@ function replaceKeyword(data: IAppProps, app: spec.App): IAppProps {
         const keyword = matches[0];
         let category = undefined;
         let term = matches[1];
-        let replacement: string | undefined = undefined;
         const pos = term.indexOf('/');
         if (pos >= 0) {
           category = term.substring(0, pos);
           term = term.substring(pos + 1);
         }
-        if (category == 'actor') {
-          const actor = app.getActor(new spec.ActorId(term));
-          if (!actor) {
-            const errPathText = path.concat([name]).join('/');
-            throw new common.ParseError(`${errPathText} の ${keyword} は、actors に未定義です`);
-          }
-          replacement = actor.name.text;
-        }
-        if (!replacement) {
-          const glossary = app.getGlossary(
-            new spec.GlossaryId(term),
-            category ? new spec.GlossaryCategory(category) : undefined
-          );
-          if (!glossary) {
-            const errPathText = path.concat([name]).join('/');
-            throw new common.ParseError(`${errPathText} の ${keyword} は、glossaries に未定義です`);
-          }
-          replacement = glossary.text;
+        const glossary = app.getGlossary(
+          new spec.GlossaryId(term),
+          category ? new spec.GlossaryCategory(category) : undefined
+        );
+        if (!glossary) {
+          const errPathText = path.concat([name]).join('/');
+          throw new common.ParseError(`${errPathText} の ${keyword} は、glossaries に未定義です`);
         }
         if (matches['index'] == undefined) {
           throw new common.ParseError("matches['index'] がない状態は、regexp が変更された状態が考えられます");
         }
+        appendUcGlossary(ucGlossaries, glossary, app, path, name);
         const index: number = matches['index'];
         const prefix = text.substring(0, index);
         const sufix = text.substring(index + matches[0].length);
-        text = `${prefix}${replacement}${sufix}`;
+        text = `${prefix}${glossary.text}${sufix}`;
       } while (matches);
+      if (name == 'playerId') {
+        const actor = app.getActor(new spec.ActorId(val));
+        if (!actor) {
+          const glossary = app.getGlossary(new spec.GlossaryId(val));
+          if (glossary) {
+            appendUcGlossary(ucGlossaries, glossary, app, path, name);
+          }
+        }
+      }
       obj[name] = text;
     }
   );
-  return data;
+  return ucGlossaries;
+}
+
+function appendUcGlossary(
+  ucGlossaries: Map<string, Set<spec.Glossary>>,
+  glossary: spec.Glossary,
+  app: spec.App,
+  path: string[],
+  name: string
+) {
+  if (path[0] == 'usecases') {
+    const ucId = path[1];
+    const uc = app.getUseCase(new spec.UseCaseId(ucId));
+    if (!uc) {
+      const errPathText = path.concat([name]).join('/');
+      //  path の使われ方が変わったりするとエラーになる
+      throw new common.ParseError(`${errPathText} ユースケースが見つからない`);
+    }
+    let gset = ucGlossaries.get(ucId);
+    if (!gset) {
+      gset = new Set<spec.Glossary>();
+      ucGlossaries.set(ucId, gset);
+    }
+    gset.add(glossary);
+  }
 }

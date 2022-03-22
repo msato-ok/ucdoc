@@ -10,8 +10,15 @@ abstract class UniqueId {
   }
 }
 
-class Entity {
+class Entity implements HasKey {
   constructor(readonly id: UniqueId) {}
+  get key(): string {
+    return this.id.toString;
+  }
+}
+
+export interface HasKey {
+  get key(): string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
@@ -39,19 +46,27 @@ export class Description extends HasText implements ValueObject {
     super(text);
   }
 }
+export class Url extends HasText implements ValueObject {
+  constructor(readonly text: string) {
+    super(text);
+  }
+}
 
-export class EntityCache<T extends Entity> {
+export class Cache<T extends HasKey> {
   private _cache: Map<string, T> = new Map<string, T>();
 
-  get(id: UniqueId): T | undefined {
-    return this._cache.get(id.toString);
+  get(key: string | UniqueId): T | undefined {
+    if (key instanceof UniqueId) {
+      return this._cache.get(key.id);
+    }
+    return this._cache.get(key);
   }
 
   add(obj: T) {
-    if (this._cache.has(obj.id.toString)) {
-      throw new common.ValidationError(`actor(${obj.id}) はユニークにしてください`);
+    if (this._cache.has(obj.key)) {
+      throw new common.ValidationError(`actor(${obj.key}) はユニークにしてください`);
     }
-    this._cache.set(obj.id.toString, obj);
+    this._cache.set(obj.key, obj);
   }
 
   addAll(objs: T[]) {
@@ -66,15 +81,15 @@ export class EntityCache<T extends Entity> {
 }
 
 export class App {
-  private _actors: EntityCache<Actor> = new EntityCache<Actor>();
-  private _usecases: EntityCache<UseCase> = new EntityCache<UseCase>();
-  private _scenarios: EntityCache<Scenario> = new EntityCache<Scenario>();
+  private _actors: Cache<Actor> = new Cache<Actor>();
+  private _usecases: Cache<UseCase> = new Cache<UseCase>();
+  private _scenarios: Cache<Scenario> = new Cache<Scenario>();
 
   constructor(
-    public readonly actors: Actor[],
-    public readonly usecases: UseCase[],
-    public readonly scenarios: Scenario[],
-    public readonly glossaries: Glossary[]
+    readonly actors: Actor[],
+    readonly usecases: UseCase[],
+    readonly scenarios: Scenario[],
+    readonly glossaries: GlossaryCollection
   ) {
     this._actors.addAll(actors);
     this._usecases.addAll(usecases);
@@ -97,35 +112,31 @@ export class App {
     return this._actors.get(id);
   }
 
+  getUseCase(id: UseCaseId): UseCase | undefined {
+    return this._usecases.get(id);
+  }
+
   getGlossary(name: GlossaryId, category?: GlossaryCategory): Glossary | undefined {
-    for (const glossary of this.glossaries) {
-      if (category && glossary.category) {
-        if (!glossary.category.equals(category)) {
-          continue;
-        }
-      }
-      if (!glossary.name.equals(name)) {
-        continue;
-      }
-      return glossary;
-    }
-    return undefined;
+    return this.glossaries.get(name, category);
   }
 }
 
 export class ActorId extends UniqueId {}
 
 export class Actor extends Entity {
-  constructor(public readonly id: ActorId, public readonly name: Name) {
+  constructor(readonly id: ActorId, readonly name: Name) {
     super(id);
+  }
+  get text(): string {
+    return this.name.text;
   }
 }
 
 export class UseCaseId extends UniqueId {}
 
 export class UseCase extends Entity {
-  private _preConditions: EntityCache<PreCondition> = new EntityCache<PreCondition>();
-  private _postConditions: EntityCache<PostCondition> = new EntityCache<PostCondition>();
+  private _preConditions: Cache<PreCondition> = new Cache<PreCondition>();
+  private _postConditions: Cache<PostCondition> = new Cache<PostCondition>();
 
   get actors(): Actor[] {
     let acts: Actor[] = [];
@@ -143,12 +154,14 @@ export class UseCase extends Entity {
     readonly postConditions: PostCondition[],
     readonly basicFlows: FlowCollection,
     readonly alternateFlows: AltExFlowCollection<AlternateFlow>,
-    readonly exceptionFlows: AltExFlowCollection<ExceptionFlow>
+    readonly exceptionFlows: AltExFlowCollection<ExceptionFlow>,
+    readonly glossaries?: GlossaryCollection
   ) {
     super(id);
     this._preConditions.addAll(preConditions);
     this._postConditions.addAll(postConditions);
     this.validateFlowId();
+    this.updateFlowsRef();
   }
 
   private validateFlowId() {
@@ -166,10 +179,24 @@ export class UseCase extends Entity {
       }
     });
   }
+
+  private updateFlowsRef() {
+    for (const flow of this.alternateFlows.flows) {
+      for (const srcFlow of flow.sourceFlows) {
+        srcFlow.addRefFlow(flow);
+      }
+      flow.returnFlow.hasBackLink = true;
+    }
+    for (const flow of this.exceptionFlows.flows) {
+      for (const srcFlow of flow.sourceFlows) {
+        srcFlow.addRefFlow(flow);
+      }
+    }
+  }
 }
 
 export class PrePostCondition extends Entity {
-  constructor(public readonly id: UniqueId, public readonly description: Description) {
+  constructor(readonly id: UniqueId, readonly description: Description) {
     super(id);
   }
 }
@@ -177,13 +204,13 @@ export class PrePostCondition extends Entity {
 export class PrePostConditionId extends UniqueId {}
 
 export class PreCondition extends PrePostCondition {
-  constructor(public readonly id: PrePostConditionId, public readonly description: Description) {
+  constructor(readonly id: PrePostConditionId, readonly description: Description) {
     super(id, description);
   }
 }
 
 export class PostCondition extends PrePostCondition {
-  constructor(public readonly id: PrePostConditionId, public readonly description: Description) {
+  constructor(readonly id: PrePostConditionId, readonly description: Description) {
     super(id, description);
   }
 }
@@ -191,27 +218,43 @@ export class PostCondition extends PrePostCondition {
 export class FlowId extends UniqueId {}
 
 export class Flow extends Entity {
-  constructor(
-    public readonly id: FlowId,
-    public readonly description: Description,
-    public readonly player: Actor | Glossary
-  ) {
+  private _refFlows: Set<AbstractAltExFlow> = new Set<AbstractAltExFlow>();
+  private _hasBackLink = false;
+
+  get refFlows(): AbstractAltExFlow[] {
+    return Array.from(this._refFlows);
+  }
+
+  get hasBackLink(): boolean {
+    return this._hasBackLink;
+  }
+
+  set hasBackLink(b: boolean) {
+    this._hasBackLink = b;
+  }
+
+  constructor(readonly id: FlowId, readonly description: Description, readonly player: Actor | Glossary) {
     super(id);
     if (!player) {
       throw new common.ValidationError(`flow(${id}) に player(${player}) は必須です。`);
     }
   }
+
+  addRefFlow(flow: AbstractAltExFlow) {
+    this._refFlows.add(flow);
+    this.hasBackLink = true;
+  }
 }
 
 export class FlowCollection {
-  private _flows: EntityCache<Flow> = new EntityCache<Flow>();
+  private _flows: Cache<Flow> = new Cache<Flow>();
   private _actors: Set<Actor> = new Set<Actor>();
 
   get actors(): Actor[] {
-    return Object.values(this._actors) as Actor[];
+    return Array.from(this._actors);
   }
 
-  constructor(public readonly flows: Flow[]) {
+  constructor(readonly flows: Flow[]) {
     this._flows.addAll(flows);
     for (const flow of flows) {
       if (flow.player instanceof Actor) {
@@ -223,10 +266,10 @@ export class FlowCollection {
 
 export abstract class AbstractAltExFlow extends Entity {
   constructor(
-    public readonly id: AlternateFlowId | ExceptionFlowId,
-    public readonly description: Description,
-    public readonly sourceFlows: Flow[],
-    public readonly nextFlows: FlowCollection
+    readonly id: AlternateFlowId | ExceptionFlowId,
+    readonly description: Description,
+    readonly sourceFlows: Flow[],
+    readonly nextFlows: FlowCollection
   ) {
     super(id);
   }
@@ -236,11 +279,11 @@ export class AlternateFlowId extends UniqueId {}
 
 export class AlternateFlow extends AbstractAltExFlow {
   constructor(
-    public readonly id: AlternateFlowId,
-    public readonly description: Description,
-    public readonly sourceFlows: Flow[],
-    public readonly nextFlows: FlowCollection,
-    public readonly returnFlow: Flow
+    readonly id: AlternateFlowId,
+    readonly description: Description,
+    readonly sourceFlows: Flow[],
+    readonly nextFlows: FlowCollection,
+    readonly returnFlow: Flow
   ) {
     super(id, description, sourceFlows, nextFlows);
   }
@@ -250,21 +293,21 @@ export class ExceptionFlowId extends UniqueId {}
 
 export class ExceptionFlow extends AbstractAltExFlow {
   constructor(
-    public readonly id: ExceptionFlowId,
-    public readonly description: Description,
-    public readonly sourceFlows: Flow[],
-    public readonly nextFlows: FlowCollection
+    readonly id: ExceptionFlowId,
+    readonly description: Description,
+    readonly sourceFlows: Flow[],
+    readonly nextFlows: FlowCollection
   ) {
     super(id, description, sourceFlows, nextFlows);
   }
 }
 
 export class AltExFlowCollection<T extends AbstractAltExFlow> {
-  private _flows: EntityCache<T> = new EntityCache<T>();
+  private _flows: Cache<T> = new Cache<T>();
   private _actors: Set<Actor> = new Set<Actor>();
 
   get actors(): Actor[] {
-    return Object.values(this._actors) as Actor[];
+    return Array.from(this._actors);
   }
 
   constructor(readonly flows: T[]) {
@@ -293,28 +336,24 @@ export class PictConstraint extends HasText implements ValueObject {
 
 export class Pict extends Entity {
   constructor(
-    public readonly id: PictId,
-    public readonly sourceFlows: Flow[],
-    public readonly factors: PictFactor[],
-    public readonly constraint: PictConstraint,
-    public readonly flowChangePatterns: PictFlowChangePattern
+    readonly id: PictId,
+    readonly sourceFlows: Flow[],
+    readonly factors: PictFactor[],
+    readonly constraint: PictConstraint,
+    readonly flowChangePatterns: PictFlowChangePattern
   ) {
     super(id);
   }
 }
 
 export class PictFactor {
-  constructor(public readonly name: Name, public readonly items: PictItem[]) {}
+  constructor(readonly name: Name, readonly items: PictItem[]) {}
 }
 
 export class PictFlowChangePatternId extends UniqueId {}
 
 export class PictFlowChangePattern extends Entity {
-  constructor(
-    public readonly id: PictFlowChangePatternId,
-    public readonly conditions: PictFactor[],
-    public readonly nextFlow: Flow
-  ) {
+  constructor(readonly id: PictFlowChangePatternId, readonly conditions: PictFactor[], readonly nextFlow: Flow) {
     super(id);
   }
 }
@@ -323,10 +362,10 @@ export class ScenarioId extends UniqueId {}
 
 export class Scenario extends Entity {
   constructor(
-    public readonly id: ScenarioId,
-    public readonly name: Name,
-    public readonly summary: Summary,
-    public readonly usecaseOrders: UseCase[]
+    readonly id: ScenarioId,
+    readonly name: Name,
+    readonly summary: Summary,
+    readonly usecaseOrders: UseCase[]
   ) {
     super(id);
   }
@@ -335,23 +374,77 @@ export class Scenario extends Entity {
 export class GlossaryId extends UniqueId {}
 
 export class GlossaryCategory extends HasText implements ValueObject {
+  get key(): string {
+    return this.text;
+  }
+
   constructor(readonly text: string) {
     super(text);
   }
 }
 
 export class Glossary extends Entity {
-  constructor(readonly name: GlossaryId, readonly category?: GlossaryCategory, readonly desc?: Description) {
-    super(name);
-    if (!desc) {
-      this.desc = new Description(name.id);
-    }
-  }
   get text(): string {
     if (this.desc) {
       return this.desc.text;
     }
     return this.name.id;
+  }
+
+  constructor(
+    readonly name: GlossaryId,
+    readonly category: GlossaryCategory,
+    readonly desc?: Description,
+    readonly url?: Url
+  ) {
+    super(name);
+    if (!desc) {
+      this.desc = new Description(name.id);
+    }
+  }
+}
+
+export class GlossaryCollection {
+  private _categorizedGlossaries: Map<string, Glossary[]> = new Map<string, Glossary[]>();
+  private _glossaries: Cache<Glossary> = new Cache<Glossary>();
+
+  get categories(): GlossaryCategory[] {
+    return Array.from(this._categorizedGlossaries.keys()).map(x => new GlossaryCategory(x));
+  }
+
+  constructor(readonly items: Glossary[]) {
+    this._glossaries.addAll(items);
+    for (const g of items) {
+      if (g.category) {
+        let gs = this._categorizedGlossaries.get(g.category.key);
+        if (!gs) {
+          gs = [];
+          this._categorizedGlossaries.set(g.category.key, gs);
+        }
+        gs.push(g);
+      }
+    }
+  }
+
+  get(name: GlossaryId, category?: GlossaryCategory): Glossary | undefined {
+    const g = this._glossaries.get(name);
+    if (!g) {
+      return undefined;
+    }
+    if (category) {
+      if (!g.category.equals(category)) {
+        return undefined;
+      }
+    }
+    return g;
+  }
+
+  byCategory(category: GlossaryCategory): Glossary[] {
+    let gs: Glossary[] | undefined = this._categorizedGlossaries.get(category.key);
+    if (!gs) {
+      gs = [];
+    }
+    return gs;
   }
 }
 
