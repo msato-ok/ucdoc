@@ -388,18 +388,25 @@ export class Glossary extends Entity {
     if (this.desc) {
       return this.desc.text;
     }
-    return this.name.id;
+    if (this.name) {
+      return this.name.text;
+    }
+    return this.id.toString;
   }
 
   constructor(
-    readonly name: GlossaryId,
+    readonly id: GlossaryId,
     readonly category: GlossaryCategory,
+    readonly name?: Name,
     readonly desc?: Description,
     readonly url?: Url
   ) {
-    super(name);
+    super(id);
+    if (!this.name) {
+      this.name = new Name(id.toString);
+    }
     if (!desc) {
-      this.desc = new Description(name.id);
+      this.desc = new Description(this.name.text);
     }
   }
 }

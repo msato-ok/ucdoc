@@ -1,4 +1,4 @@
-import * as spec from './spec';
+import * as spec from '../spec';
 import yaml from 'js-yaml';
 import ejs from 'ejs';
 import fs from 'fs';
@@ -117,7 +117,7 @@ export class UcmdSpecCommand implements SpecCommand {
   <%_ uc.glossaries.categories.forEach((cat) => { %>
 - <%= cat.text %>
     <%_ uc.glossaries.byCategory(cat).forEach((glossary) => { %>
-    - <a name="<%= glossary.name.toString %>"><%= glossary.name.toString %></a>: <%= glossary.text -%>
+    - <a name="<%= glossary.id.toString %>"><%= glossary.id.toString %></a>: <%= glossary.text -%>
     <% }); %>
   <% }); %>
 <% } %>

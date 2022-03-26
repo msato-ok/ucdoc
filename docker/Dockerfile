@@ -27,6 +27,10 @@ ENV LANG ja_JP.UTF-8
 ENV LC_CTYPE ja_JP.UTF-8
 RUN localedef -f UTF-8 -i ja_JP ja_JP.utf8
 
+# pandoc
+RUN apt-get -y install --no-install-recommends \
+  pandoc
+
 # cleaning up unused files
 RUN apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
   && rm -rf /var/lib/apt/lists/*
