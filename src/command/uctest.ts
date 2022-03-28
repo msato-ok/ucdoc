@@ -182,8 +182,8 @@ export class UsecaseTestCommand implements base.SpecCommand {
     }
     function vueTableHeader(item: any) {
       const data = [];
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      for (const key of item.keys()) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      for (const key of Object.keys(item)) {
         data.push({
           value: key,
           text: headerText[key],
