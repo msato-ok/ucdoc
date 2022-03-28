@@ -260,7 +260,7 @@ function parseBasicFlows(
     if (!player) {
       const errPathText = currPath.concat(['playerId']).join('/');
       throw new common.ParseError(
-        `${errPathText} の ${props.playerId} は定義されていません。actors に追加するか、glossary/player に追加してください。`
+        `${errPathText} の ${props.playerId} は定義されていません。actors に追加するか、glossary に追加してください。`
       );
     }
     const flow = new spec.Flow(new spec.FlowId(id), new spec.Description(props.description), player);

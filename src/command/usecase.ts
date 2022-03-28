@@ -1,14 +1,11 @@
 import * as spec from '../spec';
+import * as base from './base';
 import yaml from 'js-yaml';
 import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
 
-export interface SpecCommand {
-  execute(spec: spec.App): void;
-}
-
-export class UcmdSpecCommand implements SpecCommand {
+export class UsecaseCommand implements base.SpecCommand {
   constructor(private output: string) {}
 
   public execute(spc: spec.App): void {
@@ -129,7 +126,6 @@ export class UcmdSpecCommand implements SpecCommand {
 %>
 `;
     const mdtext = ejs.render(template.trimStart(), data, {});
-    console.log(mdtext);
     const mdpath = path.join(this.output, `${uc.id.toString}.md`);
     fs.writeFileSync(mdpath, mdtext);
   }
