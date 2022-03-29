@@ -87,8 +87,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
       });
     }
     interface ITestStep {
-      flowId: string;
-      desc: string;
+      flow: spec.Flow;
       summaries: Map<ISummaryItem, string>;
     }
     const testSteps: ITestStep[] = [];
@@ -108,8 +107,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
     const summaryStartFlow = new Map<ISummaryItem, spec.Flow>();
     for (const bFlow of uc.basicFlows.flows) {
       const stepItem: ITestStep = {
-        flowId: bFlow.id.toString,
-        desc: bFlow.description.text,
+        flow: bFlow,
         summaries: initSummaries(),
       };
       testSteps.push(stepItem);
@@ -130,9 +128,8 @@ export class UsecaseTestCommand implements base.SpecCommand {
           }
         }
         for (const nFlow of refFlow.nextFlows.flows) {
-          const nStep = {
-            flowId: nFlow.id.toString,
-            desc: nFlow.description.text,
+          const nStep: ITestStep = {
+            flow: nFlow,
             summaries: initSummaries(),
           };
           // 分岐先のフローは、常に1つのテストケースしか○にならない
@@ -160,11 +157,12 @@ export class UsecaseTestCommand implements base.SpecCommand {
     const testStepJsons = [];
     for (const testStep of testSteps) {
       const testStepJson: Record<string, string> = {};
-      testStepJson['flowId'] = testStep.flowId;
+      testStepJson['flowId'] = testStep.flow.id.toString;
       testStep.summaries.forEach((mark: string, summary: ISummaryItem) => {
         testStepJson[summary.summaryId] = mark;
       });
-      testStepJson['desc'] = testStep.desc;
+      testStepJson['playerId'] = testStep.flow.player.id.toString;
+      testStepJson['desc'] = testStep.flow.description.text;
       testStepJsons.push(testStepJson);
     }
     const headerText: Record<string, string> = {
@@ -172,7 +170,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
       type: '分類',
       usecase: 'ユースケース',
       desc: '説明',
-      playerId: 'ID',
+      playerId: 'Player ID',
       preConditionId: 'ID',
       postConditionId: 'ID',
       flowId: 'フローID',
@@ -230,13 +228,18 @@ export class UsecaseTestCommand implements base.SpecCommand {
     #test-step table th {
       border-left: thin solid rgba(0, 0, 0, .12);
       /* 横線を消す */
-      border-bottom: none;
+      /*border-bottom: none;*/
     }
-
+    /* 表の外枠線を描く */
     #test-step table {
       border-top: thin solid rgba(0, 0, 0, .12);
       border-bottom: thin solid rgba(0, 0, 0, .12);
       border-right: thin solid rgba(0, 0, 0, .12);
+    }
+    /* テスト手順の表の偶数列をグレーにする */
+    #test-step table td:nth-child(2n),
+    #test-step table th:nth-child(2n) {
+      background-color: #EEEEEE;
     }
   </style>
 </head>
@@ -271,7 +274,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               <v-card-title class="text-h6">
                 Player
               </v-card-title>
-              <v-card-subtitle>テストに登場するアクターやシステム</v-card-subtitle>
+              <v-card-subtitle>テストに登場するアクターとシステム</v-card-subtitle>
               <v-card-text>
                 <v-data-table dense :headers="player.headers" :items="player.items" :disable-sort="true"
                   disable-pagination hide-default-footer></v-data-table>
@@ -309,7 +312,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               <v-card-title class="text-h6">
                 テスト手順
               </v-card-title>
-              <v-card-subtitle>分岐パターンのテストを実施するときに、事前条件を準備する</v-card-subtitle>
+              <v-card-subtitle>○のついたフローを縦方向に進めてください</v-card-subtitle>
               <v-card-text>
                 <v-data-table dense :headers="step.headers" :items="step.items" :disable-sort="true" fixed-header
                   disable-pagination hide-default-footer></v-data-table>
