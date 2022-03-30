@@ -1,5 +1,7 @@
 import { Command } from 'commander';
-import * as cmd from './cmd';
+import { SpecCommand } from './command/base';
+import { UsecaseCommand } from './command/usecase';
+import { UsecaseTestCommand } from './command/uctest';
 import * as parser from './parser';
 
 const packageJson = require('../package.json');
@@ -10,25 +12,28 @@ const program = new Command();
 program.name('ucdoc').version(version);
 
 program
-  .command('ucmd <file> [otherFiles...]')
+  .command('usecase <file> [otherFiles...]')
   .description('generate use case description documents using markdown')
   .requiredOption('-o, --output <directory>', 'output directory')
   .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
     const output = options['output'];
-    const command = new cmd.UcmdSpecCommand(output);
+    const command = new UsecaseCommand(output);
     executeCommand(file, otherFiles, command);
   });
 
-// program
-//   .command('itmd <file> [otherFiles...]')
-//   .description('generate IT test scenarios using markdown')
-//   .action((file: string, otherFiles: string[]) => {
-//     // TODO
-//   });
+program
+  .command('uctest <file> [otherFiles...]')
+  .description('generate uctest documents using html')
+  .requiredOption('-o, --output <directory>', 'output directory')
+  .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
+    const output = options['output'];
+    const command = new UsecaseTestCommand(output);
+    executeCommand(file, otherFiles, command);
+  });
 
 program.parse(process.argv);
 
-function executeCommand(file: string, otherFiles: string[], specCmd: cmd.SpecCommand) {
+function executeCommand(file: string, otherFiles: string[], specCmd: SpecCommand) {
   try {
     let files = [file];
     if (otherFiles) {

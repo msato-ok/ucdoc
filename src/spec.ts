@@ -139,11 +139,31 @@ export class UseCase extends Entity {
   private _postConditions: Cache<PostCondition> = new Cache<PostCondition>();
 
   get actors(): Actor[] {
-    let acts: Actor[] = [];
-    acts = acts.concat(this.basicFlows.actors);
-    acts = acts.concat(this.alternateFlows.actors);
-    acts = acts.concat(this.exceptionFlows.actors);
-    return acts;
+    const acts = new Set<Actor>();
+    this.basicFlows.actors.forEach(a => {
+      acts.add(a);
+    });
+    this.alternateFlows.actors.forEach(a => {
+      acts.add(a);
+    });
+    this.exceptionFlows.actors.forEach(a => {
+      acts.add(a);
+    });
+    return Array.from(acts);
+  }
+
+  get players(): Player[] {
+    const players = new Set<Player>();
+    this.basicFlows.players.forEach(o => {
+      players.add(o);
+    });
+    this.alternateFlows.players.forEach(o => {
+      players.add(o);
+    });
+    this.exceptionFlows.players.forEach(o => {
+      players.add(o);
+    });
+    return Array.from(players);
   }
 
   constructor(
@@ -249,9 +269,14 @@ export class Flow extends Entity {
 export class FlowCollection {
   private _flows: Cache<Flow> = new Cache<Flow>();
   private _actors: Set<Actor> = new Set<Actor>();
+  private _players: Set<Player> = new Set<Player>();
 
   get actors(): Actor[] {
     return Array.from(this._actors);
+  }
+
+  get players(): Player[] {
+    return Array.from(this._players);
   }
 
   constructor(readonly flows: Flow[]) {
@@ -260,6 +285,7 @@ export class FlowCollection {
       if (flow.player instanceof Actor) {
         this._actors.add(flow.player);
       }
+      this._players.add(flow.player);
     }
   }
 }
@@ -305,9 +331,14 @@ export class ExceptionFlow extends AbstractAltExFlow {
 export class AltExFlowCollection<T extends AbstractAltExFlow> {
   private _flows: Cache<T> = new Cache<T>();
   private _actors: Set<Actor> = new Set<Actor>();
+  private _players: Set<Player> = new Set<Player>();
 
   get actors(): Actor[] {
     return Array.from(this._actors);
+  }
+
+  get players(): Player[] {
+    return Array.from(this._players);
   }
 
   constructor(readonly flows: T[]) {
@@ -315,6 +346,9 @@ export class AltExFlowCollection<T extends AbstractAltExFlow> {
     for (const flow of flows) {
       for (const actor of flow.nextFlows.actors) {
         this._actors.add(actor);
+      }
+      for (const player of flow.nextFlows.players) {
+        this._players.add(player);
       }
     }
   }
@@ -388,18 +422,25 @@ export class Glossary extends Entity {
     if (this.desc) {
       return this.desc.text;
     }
-    return this.name.id;
+    if (this.name) {
+      return this.name.text;
+    }
+    return this.id.toString;
   }
 
   constructor(
-    readonly name: GlossaryId,
+    readonly id: GlossaryId,
     readonly category: GlossaryCategory,
+    readonly name?: Name,
     readonly desc?: Description,
     readonly url?: Url
   ) {
-    super(name);
+    super(id);
+    if (!this.name) {
+      this.name = new Name(id.toString);
+    }
     if (!desc) {
-      this.desc = new Description(name.id);
+      this.desc = new Description(this.name.text);
     }
   }
 }
@@ -447,6 +488,8 @@ export class GlossaryCollection {
     return gs;
   }
 }
+
+type Player = Actor | Glossary;
 
 type WalkCallback = (obj: Record<string, unknown>, path: string[], name: string, val: unknown) => void;
 

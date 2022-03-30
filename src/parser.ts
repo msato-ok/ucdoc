@@ -14,7 +14,11 @@ interface IAppProps {
   usecases: {
     [key: string]: IUseCaseProps;
   };
-  glossaries: IGlossaryProps[];
+  glossaries: {
+    [key: string]: {
+      [key: string]: IGlossaryProps;
+    };
+  };
 }
 
 interface IActorProps {
@@ -130,13 +134,22 @@ function parseApp(data: IAppProps, ucGlossaries?: Map<string, Set<spec.Glossary>
 
 function parseGlossary(data: IAppProps): spec.GlossaryCollection {
   const glossaries: spec.Glossary[] = [];
-  for (const props of Object.values(data.glossaries)) {
-    const o = new spec.Glossary(
-      new spec.GlossaryId(props.name),
-      new spec.GlossaryCategory(props.category),
-      props.desc ? new spec.Description(props.desc) : undefined
-    );
-    glossaries.push(o);
+  for (const [cat, glossariesByCat] of Object.entries(data.glossaries)) {
+    for (const [id, props] of Object.entries(glossariesByCat)) {
+      let o: spec.Glossary;
+      if (!props) {
+        o = new spec.Glossary(new spec.GlossaryId(id), new spec.GlossaryCategory(cat));
+      } else {
+        o = new spec.Glossary(
+          new spec.GlossaryId(id),
+          new spec.GlossaryCategory(cat),
+          props.name ? new spec.Name(props.name) : undefined,
+          props.desc ? new spec.Description(props.desc) : undefined,
+          props.url ? new spec.Url(props.url) : undefined
+        );
+      }
+      glossaries.push(o);
+    }
   }
   return new spec.GlossaryCollection(glossaries);
 }
@@ -247,7 +260,7 @@ function parseBasicFlows(
     if (!player) {
       const errPathText = currPath.concat(['playerId']).join('/');
       throw new common.ParseError(
-        `${errPathText} の ${props.playerId} は定義されていません。actors に追加するか、glossary/player に追加してください。`
+        `${errPathText} の ${props.playerId} は定義されていません。actors に追加するか、glossary に追加してください。`
       );
     }
     const flow = new spec.Flow(new spec.FlowId(id), new spec.Description(props.description), player);
@@ -376,6 +389,9 @@ function replaceKeyword(data: IAppProps, app: spec.App): Map<string, Set<spec.Gl
         const keyword = matches[0];
         let category = undefined;
         let term = matches[1];
+        if (matches['index'] == undefined) {
+          throw new common.ParseError("matches['index'] がない状態は、regexp が変更された状態が考えられます");
+        }
         const pos = term.indexOf('/');
         if (pos >= 0) {
           category = term.substring(0, pos);
@@ -389,14 +405,11 @@ function replaceKeyword(data: IAppProps, app: spec.App): Map<string, Set<spec.Gl
           const errPathText = path.concat([name]).join('/');
           throw new common.ParseError(`${errPathText} の ${keyword} は、glossaries に未定義です`);
         }
-        if (matches['index'] == undefined) {
-          throw new common.ParseError("matches['index'] がない状態は、regexp が変更された状態が考えられます");
-        }
         appendUcGlossary(ucGlossaries, glossary, app, path, name);
         const index: number = matches['index'];
         const prefix = text.substring(0, index);
         const sufix = text.substring(index + matches[0].length);
-        const replacement = `[${glossary.text}][]`;
+        const replacement = `[${glossary.id.toString}][]`;
         text = `${prefix}${replacement}${sufix}`;
       } while (matches);
       if (name == 'playerId') {
