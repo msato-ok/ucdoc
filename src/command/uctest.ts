@@ -31,43 +31,43 @@ export class UsecaseTestCommand implements base.SpecCommand {
     // とてもハマりやすい。どのデータがタグ上の属性として使われるかは、実装しながら変わるので、
     // html に出現するアイテムは、すべて小文字で実装する。
 
-    interface ISummaryItem {
-      summary_id: string;
+    interface IScenarioItem {
+      scenario_id: string;
       type: string;
       usecase: string;
       desc: string;
     }
-    const summaryIdPrefix = 'TP';
-    const summaryItems: ISummaryItem[] = [];
-    const baseSummaryItem: ISummaryItem = {
-      summary_id: `${summaryIdPrefix}01`,
+    const scenarioIdPrefix = 'TP';
+    const scenarioItems: IScenarioItem[] = [];
+    const baseScenarioItem: IScenarioItem = {
+      scenario_id: `${scenarioIdPrefix}01`,
       type: '正常系',
       usecase: '基本フロー',
       desc: '正常に実行されて事後条件が成立する状態',
     };
-    summaryItems.push(baseSummaryItem);
-    const altexSummryMap = new Map<spec.AbstractAltExFlow, ISummaryItem>();
+    scenarioItems.push(baseScenarioItem);
+    const altexScenarioMap = new Map<spec.AbstractAltExFlow, IScenarioItem>();
     for (const altFlow of uc.alternateFlows.flows) {
-      const summaryCount = summaryItems.length + 1;
-      const item: ISummaryItem = {
-        summary_id: `${summaryIdPrefix}${util.zeropad(summaryCount, 2)}`,
+      const scenarioCount = scenarioItems.length + 1;
+      const item: IScenarioItem = {
+        scenario_id: `${scenarioIdPrefix}${util.zeropad(scenarioCount, 2)}`,
         type: '準正常系',
         usecase: `代替フロー(${altFlow.id.toString})`,
         desc: altFlow.description.text,
       };
-      summaryItems.push(item);
-      altexSummryMap.set(altFlow, item);
+      scenarioItems.push(item);
+      altexScenarioMap.set(altFlow, item);
     }
     for (const exFlow of uc.exceptionFlows.flows) {
-      const summaryCount = summaryItems.length + 1;
-      const item: ISummaryItem = {
-        summary_id: `${summaryIdPrefix}${util.zeropad(summaryCount, 2)}`,
+      const scenarioCount = scenarioItems.length + 1;
+      const item: IScenarioItem = {
+        scenario_id: `${scenarioIdPrefix}${util.zeropad(scenarioCount, 2)}`,
         type: '異常系',
         usecase: `例外フロー(${exFlow.id.toString})`,
         desc: exFlow.description.text,
       };
-      summaryItems.push(item);
-      altexSummryMap.set(exFlow, item);
+      scenarioItems.push(item);
+      altexScenarioMap.set(exFlow, item);
     }
     interface IPlayerItem {
       player_id: string;
@@ -106,49 +106,49 @@ export class UsecaseTestCommand implements base.SpecCommand {
     interface IStep {
       branchType: BranchType;
       flow: spec.Flow;
-      summaries: Map<ISummaryItem, string>;
+      scenarios: Map<IScenarioItem, string>;
       tooltips: string;
     }
     const testSteps: IStep[] = [];
     const onMark = '○';
-    function initSummaries(): Map<ISummaryItem, string> {
-      const summaries = new Map<ISummaryItem, string>();
-      for (const summary of summaryItems) {
-        summaries.set(summary, '');
+    function initScenarios(): Map<IScenarioItem, string> {
+      const scenarios = new Map<IScenarioItem, string>();
+      for (const scenario of scenarioItems) {
+        scenarios.set(scenario, '');
       }
-      return summaries;
+      return scenarios;
     }
-    // summaryStartFlow には、代替フルーからの戻り先の基本フローがセットされる。
-    // 基本フローのループ bFlow が summaryStartFlow に到達するまでは、処理されない。
-    // summaryStartFlow にそもそも登録がない場合は、戻り先を制御する必要がないことを意味する。
+    // scenarioStartFlow には、代替フルーからの戻り先の基本フローがセットされる。
+    // 基本フローのループ bFlow が scenarioStartFlow に到達するまでは、処理されない。
+    // scenarioStartFlow にそもそも登録がない場合は、戻り先を制御する必要がないことを意味する。
     // 例外フローは、基本フローに戻ることがないので、以降のループで出現することのない bFlow を
     // セットして、マーキングされることがないようにする。
-    const summaryStartFlow = new Map<ISummaryItem, spec.Flow>();
+    const scenarioStartFlow = new Map<IScenarioItem, spec.Flow>();
     for (const bFlow of uc.basicFlows.flows) {
       const stepItem: IStep = {
         branchType: bFlow.refFlows.length > 0 ? 'basic' : 'none',
         flow: bFlow,
-        summaries: initSummaries(),
+        scenarios: initScenarios(),
         tooltips: '',
       };
       if (stepItem.branchType == 'basic') {
-        stepItem.tooltips = '正常系の分岐パターン';
+        stepItem.tooltips = '基本フローの分岐パターン';
       }
       testSteps.push(stepItem);
       // bFlow を実行するテストケース（テスト手順で○になるもの）を、
-      // markingSummaries 配列に残す。
+      // markingScenarios 配列に残す。
       // 最初は、全テストケースを入れておいて、ループしながら消す
-      const markingSummaries = Array.from(stepItem.summaries.keys());
+      const markingScenarios = Array.from(stepItem.scenarios.keys());
       for (const refFlow of bFlow.refFlows) {
-        const summary = altexSummryMap.get(refFlow);
-        if (!summary) {
-          throw new Error('summary が altexSummryMap の中にない状態はバグ');
+        const scenario = altexScenarioMap.get(refFlow);
+        if (!scenario) {
+          throw new Error('scenario が altexScenarioMap の中にない状態はバグ');
         }
         // フローが分岐する場合、分岐先のテストケースは、○にならないので削除する
-        for (let i = 0; i < markingSummaries.length; i++) {
-          const refSummary = altexSummryMap.get(refFlow);
-          if (markingSummaries[i] == refSummary) {
-            markingSummaries.splice(i, i + 1);
+        for (let i = 0; i < markingScenarios.length; i++) {
+          const refScenario = altexScenarioMap.get(refFlow);
+          if (markingScenarios[i] == refScenario) {
+            markingScenarios.splice(i, i + 1);
           }
         }
         const branchType = refFlow instanceof spec.AlternateFlow ? 'alt' : 'ex';
@@ -156,29 +156,29 @@ export class UsecaseTestCommand implements base.SpecCommand {
           const nStep: IStep = {
             branchType: branchType,
             flow: nFlow,
-            summaries: initSummaries(),
-            tooltips: `${summary.usecase}の分岐パターン`,
+            scenarios: initScenarios(),
+            tooltips: `${scenario.usecase}の分岐パターン`,
           };
           // 分岐先のフローは、常に1つのテストケースしか○にならない
-          nStep.summaries.set(summary, onMark);
+          nStep.scenarios.set(scenario, onMark);
           testSteps.push(nStep);
         }
         if (refFlow instanceof spec.AlternateFlow) {
           const altFlow: spec.AlternateFlow = refFlow;
-          summaryStartFlow.set(summary, altFlow.returnFlow);
+          scenarioStartFlow.set(scenario, altFlow.returnFlow);
         } else {
-          summaryStartFlow.set(summary, bFlow);
+          scenarioStartFlow.set(scenario, bFlow);
         }
       }
-      for (const markSummary of markingSummaries) {
-        const startFlow = summaryStartFlow.get(markSummary);
+      for (const markScenario of markingScenarios) {
+        const startFlow = scenarioStartFlow.get(markScenario);
         if (startFlow) {
           if (startFlow != bFlow) {
             continue;
           }
-          summaryStartFlow.delete(markSummary);
+          scenarioStartFlow.delete(markScenario);
         }
-        stepItem.summaries.set(markSummary, onMark);
+        stepItem.scenarios.set(markScenario, onMark);
       }
     }
     // テスト手順はテストシナリオが横列で動的にプロパティが増えるので連想配列に入れ直す
@@ -186,8 +186,8 @@ export class UsecaseTestCommand implements base.SpecCommand {
     for (const testStep of testSteps) {
       const testStepJson: Record<string, string> = {};
       testStepJson['flow_id'] = testStep.flow.id.toString;
-      testStep.summaries.forEach((mark: string, summary: ISummaryItem) => {
-        testStepJson[summary.summary_id] = mark;
+      testStep.scenarios.forEach((mark: string, scenario: IScenarioItem) => {
+        testStepJson[scenario.scenario_id] = mark;
       });
       testStepJson['player_id'] = testStep.flow.player.id.toString;
       testStepJson['desc'] = testStep.flow.description.text;
@@ -199,7 +199,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
     // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
     // ヘッダー構成に出力しないようにする。
     const headerText: Record<string, string | null> = {
-      summary_id: 'No',
+      scenario_id: 'No',
       type: '分類',
       usecase: 'ユースケース',
       desc: '説明',
@@ -210,8 +210,8 @@ export class UsecaseTestCommand implements base.SpecCommand {
       branch_type: null,
       tooltips: null,
     };
-    for (const summary of summaryItems) {
-      headerText[summary.summary_id] = summary.summary_id;
+    for (const scenario of scenarioItems) {
+      headerText[scenario.scenario_id] = scenario.scenario_id;
     }
     function vueTableHeader(item: any) {
       const data = [];
@@ -229,9 +229,9 @@ export class UsecaseTestCommand implements base.SpecCommand {
     }
     const data = {
       data: JSON.stringify({
-        summary: {
-          headers: vueTableHeader(summaryItems[0]),
-          items: summaryItems,
+        scenario: {
+          headers: vueTableHeader(scenarioItems[0]),
+          items: scenarioItems,
         },
         player: {
           headers: vueTableHeader(playerItems[0]),
@@ -301,7 +301,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               </v-card-title>
               <v-card-subtitle>ユースケースのフローの分岐を網羅します。</v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :headers="summary.headers" :items="summary.items" :disable-sort="true"
+                <v-data-table dense :headers="scenario.headers" :items="scenario.items" :disable-sort="true"
                   disable-pagination hide-default-footer></v-data-table>
               </v-card-text>
             </v-card>
