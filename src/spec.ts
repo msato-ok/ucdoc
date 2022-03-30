@@ -181,21 +181,21 @@ export class UseCase extends Entity {
     super(id);
     this._preConditions.addAll(preConditions);
     this._postConditions.addAll(postConditions);
-    this.validateFlowId();
+    this.validateUniqueId();
     this.updateFlowsRef();
   }
 
-  private validateFlowId() {
+  private validateUniqueId() {
     const uniqueIds = new Set<UniqueId>();
     const _props = <Record<string, unknown>>(this as unknown);
     walkProps(_props, [], function (obj: Record<string, unknown>, path: string[], name: string, val: unknown): void {
-      if (!(val instanceof FlowId) && !(val instanceof AlternateFlowId) && !(val instanceof ExceptionFlowId)) {
+      if (!(val instanceof UniqueId)) {
         return;
       }
       if (uniqueIds.has(val)) {
         throw new common.ValidationError(
-          `usecase(${_props.id}) で、フローのIDが重複しています。(${val})\n` +
-            'basicFlows, alternateFlows, exceptionFlows 内のキーは、usecase 内でユニークになるようにしてください。'
+          `usecase(${_props.id}) で、IDが重複しています。(${val})\n` +
+            'preConditions, postConditions, basicFlows, alternateFlows, exceptionFlows, valiations のキーは、usecase 内でユニークになるようにしてください。'
         );
       }
     });
@@ -375,10 +375,18 @@ export class Valiation extends Entity {
 
 export class ValiationResultId extends UniqueId {}
 
+const ResultType = {
+  Match: 'Match',
+  All: 'All',
+  Otherwise: 'Otherwise',
+} as const;
+export type ResultType = typeof ResultType[keyof typeof ResultType];
+
 export class ValiationResult extends Entity {
   constructor(
     readonly id: ValiationResultId,
-    readonly patterns: FactorPattern[],
+    readonly resultType: ResultType,
+    readonly matchPatterns: FactorPattern[],
     readonly moveFlow: Flow | AlternateFlow | ExceptionFlow
   ) {
     super(id);
