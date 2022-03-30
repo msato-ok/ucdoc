@@ -1,304 +1,466 @@
-import yaml from 'js-yaml';
-import fs from 'fs';
-import merge from 'ts-deepmerge';
+import * as common from './common';
 
-export interface Spec {
-  scenarios: {
-    [key: string]: Scenario;
-  };
-  actors: {
-    [key: string]: Actor;
-  };
-  usecases: {
-    [key: string]: Usecase;
-  };
-  glossary: {
-    [key: string]: {
-      [key: string]: GlossaryTerm;
-    };
-  };
+abstract class UniqueId {
+  constructor(readonly id: string) {}
+  equals(id: UniqueId): boolean {
+    return this.id == id.id;
+  }
+  get toString(): string {
+    return this.id;
+  }
 }
 
-export interface Scenario {
-  name: string;
-  summary: string;
-  usecaseOrder: string[];
+class Entity implements HasKey {
+  constructor(readonly id: UniqueId) {}
+  get key(): string {
+    return this.id.toString;
+  }
 }
 
-export interface Actor {
-  name: string;
+export interface HasKey {
+  get key(): string;
 }
 
-export interface GlossaryTerm {
-  name: string;
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface ValueObject {}
+
+export abstract class HasText {
+  constructor(readonly text: string) {}
+  equals(o: HasText): boolean {
+    return o.text === this.text;
+  }
 }
 
-export interface Usecase {
-  name: string;
-  summary: string;
-  preconditions: {
-    [key: string]: string;
-  };
-  postconditions: {
-    [key: string]: string;
-  };
-  basicFlow: {
-    [key: string]: Flow;
-  };
-  alternateFlow: {
-    [key: string]: AlternateFlow;
-  };
-  exceptionFlow: {
-    [key: string]: ExceptionFlow;
-  };
-  picts: {
-    [key: string]: Pict;
-  };
+export class Name extends HasText implements ValueObject {
+  constructor(readonly text: string) {
+    super(text);
+  }
+}
+export class Summary extends HasText implements ValueObject {
+  constructor(readonly text: string) {
+    super(text);
+  }
+}
+export class Description extends HasText implements ValueObject {
+  constructor(readonly text: string) {
+    super(text);
+  }
+}
+export class Url extends HasText implements ValueObject {
+  constructor(readonly text: string) {
+    super(text);
+  }
 }
 
-interface Flow {
-  player: string;
-  description: string;
-}
+export class Cache<T extends HasKey> {
+  private _cache: Map<string, T> = new Map<string, T>();
 
-interface AlternateFlow {
-  sourceFlowIds: string[];
-  description: string;
-  nextFlow: {
-    [key: string]: Flow;
-  };
-  returnFlowId: string;
-}
+  get(key: string | UniqueId): T | undefined {
+    if (key instanceof UniqueId) {
+      return this._cache.get(key.id);
+    }
+    return this._cache.get(key);
+  }
 
-interface ExceptionFlow {
-  sourceFlowIds: string[];
-  description: string;
-  nextFlow: {
-    [key: string]: Flow;
-  };
-}
+  add(obj: T) {
+    if (this._cache.has(obj.key)) {
+      throw new common.ValidationError(`actor(${obj.key}) はユニークにしてください`);
+    }
+    this._cache.set(obj.key, obj);
+  }
 
-interface Pict {
-  sourceFlowIds: string[];
-  factors: {
-    [key: string]: string[];
-  };
-  constraint: string;
-  flowChangePatterns: {
-    [key: string]: PictFlowChangePattern;
-  };
-}
-
-interface PictFlowChangePattern {
-  condition: {
-    [key: string]: string;
-  };
-  nextFlowId: string;
-}
-
-class AppError extends Error {
-  constructor(e?: string) {
-    super(e);
-    this.name = new.target.name;
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, this.constructor);
+  addAll(objs: T[]) {
+    for (const obj of objs) {
+      this.add(obj);
     }
   }
+
+  get size(): number {
+    return this._cache.size;
+  }
 }
 
-export class ParseError extends AppError {}
+export class App {
+  private _actors: Cache<Actor> = new Cache<Actor>();
+  private _usecases: Cache<UseCase> = new Cache<UseCase>();
+  private _scenarios: Cache<Scenario> = new Cache<Scenario>();
 
-export function parseSpec(yamlFiles: string[]): Spec {
-  let data: Record<string, unknown> = {};
-  for (const yml of yamlFiles) {
-    const text = fs.readFileSync(yml, 'utf8');
-    const s = yaml.load(text) as Record<string, unknown>;
-    data = merge(data, s);
+  constructor(
+    readonly actors: Actor[],
+    readonly usecases: UseCase[],
+    readonly scenarios: Scenario[],
+    readonly glossaries: GlossaryCollection
+  ) {
+    this._actors.addAll(actors);
+    this._usecases.addAll(usecases);
+    this._scenarios.addAll(scenarios);
+    this.validate();
   }
-  const spec = <Spec>(data as unknown);
-  // scenarios の usecaseOrder のチェック
-  for (const [scenarioId, scenario] of Object.entries(spec.scenarios)) {
-    for (const usecaseId of scenario.usecaseOrder) {
-      if (!spec.usecases[usecaseId]) {
-        throw new ParseError(`scenarios/${scenarioId}/usecaseOrder の ${usecaseId} が usecases の中に見つかりません`);
+
+  private validate() {
+    // actors の必須チェック
+    if (this._actors.size == 0) {
+      throw new common.ValidationError('actors は1つ以上登録する必要があります');
+    }
+    // usecases の必須チェック
+    if (this._usecases.size == 0) {
+      throw new common.ValidationError('usecases は1つ以上登録する必要があります');
+    }
+  }
+
+  getActor(id: ActorId): Actor | undefined {
+    return this._actors.get(id);
+  }
+
+  getUseCase(id: UseCaseId): UseCase | undefined {
+    return this._usecases.get(id);
+  }
+
+  getGlossary(name: GlossaryId, category?: GlossaryCategory): Glossary | undefined {
+    return this.glossaries.get(name, category);
+  }
+}
+
+export class ActorId extends UniqueId {}
+
+export class Actor extends Entity {
+  constructor(readonly id: ActorId, readonly name: Name) {
+    super(id);
+  }
+  get text(): string {
+    return this.name.text;
+  }
+}
+
+export class UseCaseId extends UniqueId {}
+
+export class UseCase extends Entity {
+  private _preConditions: Cache<PreCondition> = new Cache<PreCondition>();
+  private _postConditions: Cache<PostCondition> = new Cache<PostCondition>();
+
+  get actors(): Actor[] {
+    let acts: Actor[] = [];
+    acts = acts.concat(this.basicFlows.actors);
+    acts = acts.concat(this.alternateFlows.actors);
+    acts = acts.concat(this.exceptionFlows.actors);
+    return acts;
+  }
+
+  constructor(
+    readonly id: UseCaseId,
+    readonly name: Name,
+    readonly summary: Summary,
+    readonly preConditions: PreCondition[],
+    readonly postConditions: PostCondition[],
+    readonly basicFlows: FlowCollection,
+    readonly alternateFlows: AltExFlowCollection<AlternateFlow>,
+    readonly exceptionFlows: AltExFlowCollection<ExceptionFlow>,
+    readonly glossaries?: GlossaryCollection
+  ) {
+    super(id);
+    this._preConditions.addAll(preConditions);
+    this._postConditions.addAll(postConditions);
+    this.validateFlowId();
+    this.updateFlowsRef();
+  }
+
+  private validateFlowId() {
+    const uniqueIds = new Set<UniqueId>();
+    const _props = <Record<string, unknown>>(this as unknown);
+    walkProps(_props, [], function (obj: Record<string, unknown>, path: string[], name: string, val: unknown): void {
+      if (!(val instanceof FlowId) && !(val instanceof AlternateFlowId) && !(val instanceof ExceptionFlowId)) {
+        return;
       }
-    }
-  }
-  // actors の必須チェック
-  if (!spec.actors || Object.keys(spec.actors).length == 0) {
-    throw new ParseError('actors は1つ以上登録する必要があります');
-  }
-  // actor は glossary の category="player" として追加する
-  for (const [actorId, actor] of Object.entries(spec.actors)) {
-    const term = { name: actor.name };
-    if (!spec.glossary['player']) {
-      spec.glossary['player'] = {};
-      term as GlossaryTerm;
-    }
-    spec.glossary['player'][actorId] = term as GlossaryTerm;
-  }
-  // usecases の必須チェック
-  if (!spec.usecases || Object.keys(spec.usecases).length == 0) {
-    throw new ParseError('usecases は1つ以上登録する必要があります');
-  }
-  // xxxFlow に関するチェック
-  // - flow のキーがユニークであることのチェック
-  // - player が actors or glossary に存在することのチェック
-  // - sourceFlowIds が存在することのチェック
-  // - returnFlowId が存在することのチェック
-  const errmsg = 'basicFlow, alternateFlow, exceptionFlow 内のキーは、usecase 内でユニークになるようにしてください。';
-  for (const [usecaseId, usecase] of Object.entries(spec.usecases)) {
-    const flowUnique = new Map<string, string>();
-    for (const [flowId, flow] of Object.entries(usecase.basicFlow)) {
-      const path = `usecases/${usecaseId}/basicFlow/${flowId}`;
-      if (flowUnique.has(flowId)) {
-        throw new ParseError(`${errmsg}\n${path} は、すでに ${flowUnique.get(flowId)} で使用されています`);
-      }
-      flowUnique.set(flowId, path);
-      // playerのチェック
-      if (!spec.glossary['player'][flow.player]) {
-        throw new ParseError(
-          `${flow.player} は player として未定義です。actors に追加するか、glossary/player に追加してください。(${path})`
+      if (uniqueIds.has(val)) {
+        throw new common.ValidationError(
+          `usecase(${_props.id}) で、フローのIDが重複しています。(${val})\n` +
+            'basicFlows, alternateFlows, exceptionFlows 内のキーは、usecase 内でユニークになるようにしてください。'
         );
       }
-    }
-    if (usecase.alternateFlow) {
-      for (const [flowId, flow] of Object.entries(usecase.alternateFlow)) {
-        let path = `usecases/${usecaseId}/alternateFlow/${flowId}`;
-        if (flowUnique.has(flowId)) {
-          throw new ParseError(`${errmsg}\n${path} は、すでに ${flowUnique.get(flowId)} で使用されています`);
-        }
-        flowUnique.set(flowId, path);
-        for (const [nextFlowId, nextFlow] of Object.entries(flow.nextFlow)) {
-          path += `/nextFlow/${nextFlowId}`;
-          if (flowUnique.has(nextFlowId)) {
-            throw new ParseError(`${errmsg}\n${path} は、すでに ${flowUnique.get(nextFlowId)} で使用されています`);
-          }
-          flowUnique.set(nextFlowId, path);
-          // sourceFlowIdsのチェック
-          for (const srcFlowId of flow.sourceFlowIds) {
-            if (!usecase.basicFlow[srcFlowId]) {
-              throw new ParseError(`${srcFlowId} は未定義です。(${path}/sourceFlowIds)`);
-            }
-          }
-          // returnFlowIdのチェック
-          if (!usecase.basicFlow[flow.returnFlowId]) {
-            throw new ParseError(`${flow.returnFlowId} は未定義です。(${path}/returnFlowId)`);
-          }
-          // playerのチェック
-          if (!spec.glossary['player'][nextFlow.player]) {
-            throw new ParseError(
-              `${nextFlow.player} は player として未定義です。actors に追加するか、glossary/player に追加してください。(${path})`
-            );
-          }
-        }
+    });
+  }
+
+  private updateFlowsRef() {
+    for (const flow of this.alternateFlows.flows) {
+      for (const srcFlow of flow.sourceFlows) {
+        srcFlow.addRefFlow(flow);
       }
+      flow.returnFlow.hasBackLink = true;
     }
-    if (usecase.exceptionFlow) {
-      for (const [flowId, flow] of Object.entries(usecase.exceptionFlow)) {
-        let path = `usecases/${usecaseId}/exceptionFlow/${flowId}`;
-        if (flowUnique.has(flowId)) {
-          throw new ParseError(`${errmsg}\n${path} は、すでに ${flowUnique.get(flowId)} で使用されています`);
-        }
-        flowUnique.set(flowId, path);
-        for (const [nextFlowId, nextFlow] of Object.entries(flow.nextFlow)) {
-          path += `/nextFlow/${nextFlowId}`;
-          if (flowUnique.has(nextFlowId)) {
-            throw new ParseError(`${errmsg}\n${path} は、すでに ${flowUnique.get(nextFlowId)} で使用されています`);
-          }
-          flowUnique.set(nextFlowId, path);
-          // sourceFlowIdsのチェック
-          for (const srcFlowId of flow.sourceFlowIds) {
-            if (!usecase.basicFlow[srcFlowId]) {
-              throw new ParseError(`${srcFlowId} は未定義です。(${path}/sourceFlowIds)`);
-            }
-          }
-          // playerのチェック
-          if (!spec.glossary['player'][nextFlow.player]) {
-            throw new ParseError(
-              `${nextFlow.player} は player として未定義です。actors に追加するか、glossary/player に追加してください。(${path})`
-            );
-          }
-        }
-      }
-    }
-    // pict に関するチェック
-    // - sourceFlowIds が存在することのチェック
-    // - flowChangePatterns が存在することのチェック
-    if (usecase.picts) {
-      for (const [pictId, pict] of Object.entries(usecase.picts)) {
-        let path = `usecases/${usecaseId}/pict/${pictId}`;
-        // sourceFlowIdsのチェック
-        for (const srcFlowId of pict.sourceFlowIds) {
-          if (!usecase.basicFlow[srcFlowId]) {
-            path += '/sourceFlowIds';
-            throw new ParseError(`${srcFlowId} は未定義です。(${path})`);
-          }
-        }
-        // flowChangePatterns のチェック
-        for (const [fcpId, fcp] of Object.entries(pict.flowChangePatterns)) {
-          path += `/flowChangePatterns/${fcpId}`;
-          for (const [factorId, value] of Object.entries(fcp.condition)) {
-            if (!pict.factors[factorId]) {
-              throw new ParseError(`${factorId} は factors で定義されたキーで指定してください。(${path})`);
-            }
-            let found = false;
-            for (const item of pict.factors[factorId]) {
-              if (item == value) {
-                found = true;
-              }
-            }
-            if (!found) {
-              path += `/condition/${factorId}`;
-              throw new ParseError(`${value} は factors/${factorId} で定義された値で指定してください。(${path})`);
-            }
-          }
-          // nextFlowId のチェック
-          if (!flowUnique.has(fcp.nextFlowId)) {
-            throw new ParseError(`${fcp.nextFlowId} は未定義です。(${path}/nextFlowId)`);
-          }
-        }
+    for (const flow of this.exceptionFlows.flows) {
+      for (const srcFlow of flow.sourceFlows) {
+        srcFlow.addRefFlow(flow);
       }
     }
   }
-  // ${xxx} が glossary にあるかチェック
-  const regexp = /\$\{([^${}]+)\}/g;
-  walkProperties(<Record<string, unknown>>(spec as unknown), [], (path: string[], name: string, val: unknown): void => {
-    if (typeof val !== 'string') {
-      return;
-    }
-    const matches = val.matchAll(regexp);
-    for (const m of Object.values(matches)) {
-      const keyword = m[0];
-      let category = '_';
-      let term: string = m[1];
-      const pos = term.indexOf('/');
-      if (pos >= 0) {
-        category = term.substring(0, pos);
-        term = term.substring(pos + 1);
-      }
-      if (!spec.glossary[category]) {
-        throw new ParseError(`${category} は、glossary に未定義です. (${path.join('/')}/${name} : ${keyword})`);
-      }
-      const catTerms = spec.glossary[category];
-      if (!catTerms[term]) {
-        throw new ParseError(`${term} は、glossary/${category} に未定義です. (${path.join('/')}/${name} : ${keyword})`);
-      }
-    }
-  });
-  return spec;
 }
 
-type WalkCallback = (path: string[], name: string, val: unknown) => void;
+export class PrePostCondition extends Entity {
+  constructor(readonly id: UniqueId, readonly description: Description) {
+    super(id);
+  }
+}
 
-function walkProperties(obj: Record<string, unknown>, path: string[], callback: WalkCallback) {
+export class PrePostConditionId extends UniqueId {}
+
+export class PreCondition extends PrePostCondition {
+  constructor(readonly id: PrePostConditionId, readonly description: Description) {
+    super(id, description);
+  }
+}
+
+export class PostCondition extends PrePostCondition {
+  constructor(readonly id: PrePostConditionId, readonly description: Description) {
+    super(id, description);
+  }
+}
+
+export class FlowId extends UniqueId {}
+
+export class Flow extends Entity {
+  private _refFlows: Set<AbstractAltExFlow> = new Set<AbstractAltExFlow>();
+  private _hasBackLink = false;
+
+  get refFlows(): AbstractAltExFlow[] {
+    return Array.from(this._refFlows);
+  }
+
+  get hasBackLink(): boolean {
+    return this._hasBackLink;
+  }
+
+  set hasBackLink(b: boolean) {
+    this._hasBackLink = b;
+  }
+
+  constructor(readonly id: FlowId, readonly description: Description, readonly player: Actor | Glossary) {
+    super(id);
+    if (!player) {
+      throw new common.ValidationError(`flow(${id}) に player(${player}) は必須です。`);
+    }
+  }
+
+  addRefFlow(flow: AbstractAltExFlow) {
+    this._refFlows.add(flow);
+    this.hasBackLink = true;
+  }
+}
+
+export class FlowCollection {
+  private _flows: Cache<Flow> = new Cache<Flow>();
+  private _actors: Set<Actor> = new Set<Actor>();
+
+  get actors(): Actor[] {
+    return Array.from(this._actors);
+  }
+
+  constructor(readonly flows: Flow[]) {
+    this._flows.addAll(flows);
+    for (const flow of flows) {
+      if (flow.player instanceof Actor) {
+        this._actors.add(flow.player);
+      }
+    }
+  }
+}
+
+export abstract class AbstractAltExFlow extends Entity {
+  constructor(
+    readonly id: AlternateFlowId | ExceptionFlowId,
+    readonly description: Description,
+    readonly sourceFlows: Flow[],
+    readonly nextFlows: FlowCollection
+  ) {
+    super(id);
+  }
+}
+
+export class AlternateFlowId extends UniqueId {}
+
+export class AlternateFlow extends AbstractAltExFlow {
+  constructor(
+    readonly id: AlternateFlowId,
+    readonly description: Description,
+    readonly sourceFlows: Flow[],
+    readonly nextFlows: FlowCollection,
+    readonly returnFlow: Flow
+  ) {
+    super(id, description, sourceFlows, nextFlows);
+  }
+}
+
+export class ExceptionFlowId extends UniqueId {}
+
+export class ExceptionFlow extends AbstractAltExFlow {
+  constructor(
+    readonly id: ExceptionFlowId,
+    readonly description: Description,
+    readonly sourceFlows: Flow[],
+    readonly nextFlows: FlowCollection
+  ) {
+    super(id, description, sourceFlows, nextFlows);
+  }
+}
+
+export class AltExFlowCollection<T extends AbstractAltExFlow> {
+  private _flows: Cache<T> = new Cache<T>();
+  private _actors: Set<Actor> = new Set<Actor>();
+
+  get actors(): Actor[] {
+    return Array.from(this._actors);
+  }
+
+  constructor(readonly flows: T[]) {
+    this._flows.addAll(flows);
+    for (const flow of flows) {
+      for (const actor of flow.nextFlows.actors) {
+        this._actors.add(actor);
+      }
+    }
+  }
+}
+
+export class PictId extends UniqueId {}
+
+export class PictItem extends HasText implements ValueObject {
+  constructor(readonly text: string) {
+    super(text);
+  }
+}
+
+export class PictConstraint extends HasText implements ValueObject {
+  constructor(readonly text: string) {
+    super(text);
+  }
+}
+
+export class Pict extends Entity {
+  constructor(
+    readonly id: PictId,
+    readonly sourceFlows: Flow[],
+    readonly factors: PictFactor[],
+    readonly constraint: PictConstraint,
+    readonly flowChangePatterns: PictFlowChangePattern
+  ) {
+    super(id);
+  }
+}
+
+export class PictFactor {
+  constructor(readonly name: Name, readonly items: PictItem[]) {}
+}
+
+export class PictFlowChangePatternId extends UniqueId {}
+
+export class PictFlowChangePattern extends Entity {
+  constructor(readonly id: PictFlowChangePatternId, readonly conditions: PictFactor[], readonly nextFlow: Flow) {
+    super(id);
+  }
+}
+
+export class ScenarioId extends UniqueId {}
+
+export class Scenario extends Entity {
+  constructor(
+    readonly id: ScenarioId,
+    readonly name: Name,
+    readonly summary: Summary,
+    readonly usecaseOrders: UseCase[]
+  ) {
+    super(id);
+  }
+}
+
+export class GlossaryId extends UniqueId {}
+
+export class GlossaryCategory extends HasText implements ValueObject {
+  get key(): string {
+    return this.text;
+  }
+
+  constructor(readonly text: string) {
+    super(text);
+  }
+}
+
+export class Glossary extends Entity {
+  get text(): string {
+    if (this.desc) {
+      return this.desc.text;
+    }
+    return this.name.id;
+  }
+
+  constructor(
+    readonly name: GlossaryId,
+    readonly category: GlossaryCategory,
+    readonly desc?: Description,
+    readonly url?: Url
+  ) {
+    super(name);
+    if (!desc) {
+      this.desc = new Description(name.id);
+    }
+  }
+}
+
+export class GlossaryCollection {
+  private _categorizedGlossaries: Map<string, Glossary[]> = new Map<string, Glossary[]>();
+  private _glossaries: Cache<Glossary> = new Cache<Glossary>();
+
+  get categories(): GlossaryCategory[] {
+    return Array.from(this._categorizedGlossaries.keys()).map(x => new GlossaryCategory(x));
+  }
+
+  constructor(readonly items: Glossary[]) {
+    this._glossaries.addAll(items);
+    for (const g of items) {
+      if (g.category) {
+        let gs = this._categorizedGlossaries.get(g.category.key);
+        if (!gs) {
+          gs = [];
+          this._categorizedGlossaries.set(g.category.key, gs);
+        }
+        gs.push(g);
+      }
+    }
+  }
+
+  get(name: GlossaryId, category?: GlossaryCategory): Glossary | undefined {
+    const g = this._glossaries.get(name);
+    if (!g) {
+      return undefined;
+    }
+    if (category) {
+      if (!g.category.equals(category)) {
+        return undefined;
+      }
+    }
+    return g;
+  }
+
+  byCategory(category: GlossaryCategory): Glossary[] {
+    let gs: Glossary[] | undefined = this._categorizedGlossaries.get(category.key);
+    if (!gs) {
+      gs = [];
+    }
+    return gs;
+  }
+}
+
+type WalkCallback = (obj: Record<string, unknown>, path: string[], name: string, val: unknown) => void;
+
+export function walkProps(obj: Record<string, unknown>, path: string[], callback: WalkCallback) {
   for (const [key, value] of Object.entries(obj)) {
     if (value === null) {
       continue;
     }
-    if (typeof value === 'function' || typeof value === 'object') {
-      walkProperties(<Record<string, unknown>>value, path.concat([key]), callback);
+    if (typeof value === 'function') {
+      continue;
     }
-    callback(path, key, value);
+    if (typeof value === 'object') {
+      walkProps(<Record<string, unknown>>value, path.concat([key]), callback);
+    }
+    callback(obj, path, key, value);
   }
 }
