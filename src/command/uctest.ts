@@ -103,13 +103,13 @@ export class UsecaseTestCommand implements base.SpecCommand {
       });
     }
     type BranchType = 'none' | 'basic' | 'alt' | 'ex';
-    interface IStep {
+    interface IScenarioOutline {
       branchType: BranchType;
       flow: spec.Flow;
       scenarios: Map<IScenarioItem, string>;
       tooltips: string;
     }
-    const testSteps: IStep[] = [];
+    const testScenarioOutlines: IScenarioOutline[] = [];
     const onMark = '○';
     function initScenarios(): Map<IScenarioItem, string> {
       const scenarios = new Map<IScenarioItem, string>();
@@ -125,20 +125,20 @@ export class UsecaseTestCommand implements base.SpecCommand {
     // セットして、マーキングされることがないようにする。
     const scenarioStartFlow = new Map<IScenarioItem, spec.Flow>();
     for (const bFlow of uc.basicFlows.flows) {
-      const stepItem: IStep = {
+      const scenarioOutline: IScenarioOutline = {
         branchType: bFlow.refFlows.length > 0 ? 'basic' : 'none',
         flow: bFlow,
         scenarios: initScenarios(),
         tooltips: '',
       };
-      if (stepItem.branchType == 'basic') {
-        stepItem.tooltips = '基本フローの分岐パターン';
+      if (scenarioOutline.branchType == 'basic') {
+        scenarioOutline.tooltips = '基本フローの分岐パターン';
       }
-      testSteps.push(stepItem);
+      testScenarioOutlines.push(scenarioOutline);
       // bFlow を実行するテストケース（テスト手順で○になるもの）を、
       // markingScenarios 配列に残す。
       // 最初は、全テストケースを入れておいて、ループしながら消す
-      const markingScenarios = Array.from(stepItem.scenarios.keys());
+      const markingScenarios = Array.from(scenarioOutline.scenarios.keys());
       for (const refFlow of bFlow.refFlows) {
         const scenario = altexScenarioMap.get(refFlow);
         if (!scenario) {
@@ -153,15 +153,15 @@ export class UsecaseTestCommand implements base.SpecCommand {
         }
         const branchType = refFlow instanceof spec.AlternateFlow ? 'alt' : 'ex';
         for (const nFlow of refFlow.nextFlows.flows) {
-          const nStep: IStep = {
+          const nextScenarioOutline: IScenarioOutline = {
             branchType: branchType,
             flow: nFlow,
             scenarios: initScenarios(),
             tooltips: `${scenario.usecase}の分岐パターン`,
           };
           // 分岐先のフローは、常に1つのテストケースしか○にならない
-          nStep.scenarios.set(scenario, onMark);
-          testSteps.push(nStep);
+          nextScenarioOutline.scenarios.set(scenario, onMark);
+          testScenarioOutlines.push(nextScenarioOutline);
         }
         if (refFlow instanceof spec.AlternateFlow) {
           const altFlow: spec.AlternateFlow = refFlow;
@@ -178,22 +178,22 @@ export class UsecaseTestCommand implements base.SpecCommand {
           }
           scenarioStartFlow.delete(markScenario);
         }
-        stepItem.scenarios.set(markScenario, onMark);
+        scenarioOutline.scenarios.set(markScenario, onMark);
       }
     }
-    // テスト手順はテストシナリオが横列で動的にプロパティが増えるので連想配列に入れ直す
-    const testStepJsons = [];
-    for (const testStep of testSteps) {
-      const testStepJson: Record<string, string> = {};
-      testStepJson['flow_id'] = testStep.flow.id.toString;
-      testStep.scenarios.forEach((mark: string, scenario: IScenarioItem) => {
-        testStepJson[scenario.scenario_id] = mark;
+    // テストシナリオのフローはテストシナリオが横列で動的にプロパティが増えるので連想配列に入れ直す
+    const scenarioOutlineJsons = [];
+    for (const scenarioOutline of testScenarioOutlines) {
+      const dic: Record<string, string> = {};
+      dic['flow_id'] = scenarioOutline.flow.id.toString;
+      scenarioOutline.scenarios.forEach((mark: string, scenario: IScenarioItem) => {
+        dic[scenario.scenario_id] = mark;
       });
-      testStepJson['player_id'] = testStep.flow.player.id.toString;
-      testStepJson['desc'] = testStep.flow.description.text;
-      testStepJson['branch_type'] = testStep.branchType;
-      testStepJson['tooltips'] = testStep.tooltips;
-      testStepJsons.push(testStepJson);
+      dic['player_id'] = scenarioOutline.flow.player.id.toString;
+      dic['desc'] = scenarioOutline.flow.description.text;
+      dic['branch_type'] = scenarioOutline.branchType;
+      dic['tooltips'] = scenarioOutline.tooltips;
+      scenarioOutlineJsons.push(dic);
     }
     // v-data-table のデータは、headers に無くて、items にだけあるプロパティは、
     // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
@@ -245,9 +245,9 @@ export class UsecaseTestCommand implements base.SpecCommand {
           headers: vueTableHeader(postConditionItems[0]),
           items: postConditionItems,
         },
-        step: {
-          headers: vueTableHeader(testStepJsons[0]),
-          items: testStepJsons,
+        scenario_outline: {
+          headers: vueTableHeader(scenarioOutlineJsons[0]),
+          items: scenarioOutlineJsons,
         },
       }),
     };
@@ -262,22 +262,22 @@ export class UsecaseTestCommand implements base.SpecCommand {
   <link href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
   <style>
-    /* テスト手順の表に縦線を入れる */
-    #test-step table td,
-    #test-step table th {
+    /* テストシナリオフローの表に縦線を入れる */
+    #test-scenario-outline table td,
+    #test-scenario-outline table th {
       border-left: thin solid rgba(0, 0, 0, .12);
       /* 横線を消す */
       /*border-bottom: none;*/
     }
     /* 表の外枠線を描く */
-    #test-step table {
+    #test-scenario-outline table {
       border-top: thin solid rgba(0, 0, 0, .12);
       border-bottom: thin solid rgba(0, 0, 0, .12);
       border-right: thin solid rgba(0, 0, 0, .12);
     }
     /* テスト手順の表の偶数列をグレーにする */
-    #test-step table td:nth-child(2n),
-    #test-step table th:nth-child(2n) {
+    #test-scenario-outline table td:nth-child(2n),
+    #test-scenario-outline table th:nth-child(2n) {
       background-color: #EEEEEE;
     }
   </style>
@@ -347,13 +347,13 @@ export class UsecaseTestCommand implements base.SpecCommand {
         </v-row>
         <v-row>
           <v-col cols="12">
-            <v-card id="test-step">
+            <v-card id="test-scenario-outline">
               <v-card-title class="text-h6">
-                テスト手順
+                テストシナリオのフロー
               </v-card-title>
               <v-card-subtitle>○のついたフローを縦方向に進めてください</v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :headers="step.headers" :items="step.items" :disable-sort="true" fixed-header
+                <v-data-table dense :headers="scenario_outline.headers" :items="scenario_outline.items" :disable-sort="true" fixed-header
                   disable-pagination hide-default-footer>
                   <template v-slot:item.flow_id="{ item }">
 
