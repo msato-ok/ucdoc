@@ -15,8 +15,24 @@ export class UsecaseTestCommand implements base.SpecCommand {
   }
 
   private writeUc(app: spec.App, uc: spec.UseCase) {
+    // html のタグの属性名が小文字になっていることから、ブラウザは、タグの属性を小文字しか認識しない
+    // https://github.com/vuejs/vue/issues/9528#issuecomment-718400487
+    // そのため vue.js のカスマムタグも、キャメルケースじゃなくて、すべて小文字にする必要がある。
+    // 例えば、このようなタグで、 item.calories が属性として使われる。
+    //   <template v-slot:item.caloryValue="{ item }">
+    //     <v-chip
+    //       :color="getColor(item.caloryValue)"
+    //       dark
+    //     >
+    //       {{ item.calories }}
+    //     </v-chip>
+    //   </template>
+    // この例では、item.caloryValue に template が反応しないが、calory_value に変えると機能する。
+    // とてもハマりやすい。どのデータがタグ上の属性として使われるかは、実装しながら変わるので、
+    // html に出現するアイテムは、すべて小文字で実装する。
+
     interface ISummaryItem {
-      summaryId: string;
+      summary_id: string;
       type: string;
       usecase: string;
       desc: string;
@@ -24,7 +40,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
     const summaryIdPrefix = 'TP';
     const summaryItems: ISummaryItem[] = [];
     const baseSummaryItem: ISummaryItem = {
-      summaryId: `${summaryIdPrefix}01`,
+      summary_id: `${summaryIdPrefix}01`,
       type: '正常系',
       usecase: '基本フロー',
       desc: '正常に実行されて事後条件が成立する状態',
@@ -34,7 +50,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
     for (const altFlow of uc.alternateFlows.flows) {
       const summaryCount = summaryItems.length + 1;
       const item: ISummaryItem = {
-        summaryId: `${summaryIdPrefix}${util.zeropad(summaryCount, 2)}`,
+        summary_id: `${summaryIdPrefix}${util.zeropad(summaryCount, 2)}`,
         type: '準正常系',
         usecase: `代替フロー(${altFlow.id.toString})`,
         desc: altFlow.description.text,
@@ -45,7 +61,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
     for (const exFlow of uc.exceptionFlows.flows) {
       const summaryCount = summaryItems.length + 1;
       const item: ISummaryItem = {
-        summaryId: `${summaryIdPrefix}${util.zeropad(summaryCount, 2)}`,
+        summary_id: `${summaryIdPrefix}${util.zeropad(summaryCount, 2)}`,
         type: '異常系',
         usecase: `例外フロー(${exFlow.id.toString})`,
         desc: exFlow.description.text,
@@ -54,43 +70,46 @@ export class UsecaseTestCommand implements base.SpecCommand {
       altexSummryMap.set(exFlow, item);
     }
     interface IPlayerItem {
-      playerId: string;
+      player_id: string;
       desc: string;
     }
     const playerItems: IPlayerItem[] = [];
     for (const player of uc.players) {
       playerItems.push({
-        playerId: player.id.toString,
+        player_id: player.id.toString,
         desc: player.text,
       });
     }
     interface IPreConditionItem {
-      preConditionId: string;
+      pre_condition_id: string;
       desc: string;
     }
     const preConditionItems: IPreConditionItem[] = [];
     for (const cond of uc.preConditions) {
       preConditionItems.push({
-        preConditionId: cond.id.toString,
+        pre_condition_id: cond.id.toString,
         desc: cond.description.text,
       });
     }
     interface IPostConditionItem {
-      postConditionId: string;
+      post_condition_id: string;
       desc: string;
     }
     const postConditionItems: IPostConditionItem[] = [];
     for (const cond of uc.postConditions) {
       postConditionItems.push({
-        postConditionId: cond.id.toString,
+        post_condition_id: cond.id.toString,
         desc: cond.description.text,
       });
     }
-    interface ITestStep {
+    type BranchType = 'none' | 'basic' | 'alt' | 'ex';
+    interface IStep {
+      branchType: BranchType;
       flow: spec.Flow;
       summaries: Map<ISummaryItem, string>;
+      tooltips: string;
     }
-    const testSteps: ITestStep[] = [];
+    const testSteps: IStep[] = [];
     const onMark = '○';
     function initSummaries(): Map<ISummaryItem, string> {
       const summaries = new Map<ISummaryItem, string>();
@@ -106,10 +125,15 @@ export class UsecaseTestCommand implements base.SpecCommand {
     // セットして、マーキングされることがないようにする。
     const summaryStartFlow = new Map<ISummaryItem, spec.Flow>();
     for (const bFlow of uc.basicFlows.flows) {
-      const stepItem: ITestStep = {
+      const stepItem: IStep = {
+        branchType: bFlow.refFlows.length > 0 ? 'basic' : 'none',
         flow: bFlow,
         summaries: initSummaries(),
+        tooltips: '',
       };
+      if (stepItem.branchType == 'basic') {
+        stepItem.tooltips = '正常系の分岐パターン';
+      }
       testSteps.push(stepItem);
       // bFlow を実行するテストケース（テスト手順で○になるもの）を、
       // markingSummaries 配列に残す。
@@ -127,10 +151,13 @@ export class UsecaseTestCommand implements base.SpecCommand {
             markingSummaries.splice(i, i + 1);
           }
         }
+        const branchType = refFlow instanceof spec.AlternateFlow ? 'alt' : 'ex';
         for (const nFlow of refFlow.nextFlows.flows) {
-          const nStep: ITestStep = {
+          const nStep: IStep = {
+            branchType: branchType,
             flow: nFlow,
             summaries: initSummaries(),
+            tooltips: `${summary.usecase}の分岐パターン`,
           };
           // 分岐先のフローは、常に1つのテストケースしか○にならない
           nStep.summaries.set(summary, onMark);
@@ -154,34 +181,45 @@ export class UsecaseTestCommand implements base.SpecCommand {
         stepItem.summaries.set(markSummary, onMark);
       }
     }
+    // テスト手順はテストシナリオが横列で動的にプロパティが増えるので連想配列に入れ直す
     const testStepJsons = [];
     for (const testStep of testSteps) {
       const testStepJson: Record<string, string> = {};
-      testStepJson['flowId'] = testStep.flow.id.toString;
+      testStepJson['flow_id'] = testStep.flow.id.toString;
       testStep.summaries.forEach((mark: string, summary: ISummaryItem) => {
-        testStepJson[summary.summaryId] = mark;
+        testStepJson[summary.summary_id] = mark;
       });
-      testStepJson['playerId'] = testStep.flow.player.id.toString;
+      testStepJson['player_id'] = testStep.flow.player.id.toString;
       testStepJson['desc'] = testStep.flow.description.text;
+      testStepJson['branch_type'] = testStep.branchType;
+      testStepJson['tooltips'] = testStep.tooltips;
       testStepJsons.push(testStepJson);
     }
-    const headerText: Record<string, string> = {
-      summaryId: 'No',
+    // v-data-table のデータは、headers に無くて、items にだけあるプロパティは、
+    // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
+    // ヘッダー構成に出力しないようにする。
+    const headerText: Record<string, string | null> = {
+      summary_id: 'No',
       type: '分類',
       usecase: 'ユースケース',
       desc: '説明',
-      playerId: 'Player ID',
-      preConditionId: 'ID',
-      postConditionId: 'ID',
-      flowId: 'フローID',
+      player_id: 'Player ID',
+      pre_condition_id: 'ID',
+      post_condition_id: 'ID',
+      flow_id: 'フローID',
+      branch_type: null,
+      tooltips: null,
     };
     for (const summary of summaryItems) {
-      headerText[summary.summaryId] = summary.summaryId;
+      headerText[summary.summary_id] = summary.summary_id;
     }
     function vueTableHeader(item: any) {
       const data = [];
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       for (const key of Object.keys(item)) {
+        if (headerText[key] === null) {
+          continue;
+        }
         data.push({
           value: key,
           text: headerText[key],
@@ -199,11 +237,11 @@ export class UsecaseTestCommand implements base.SpecCommand {
           headers: vueTableHeader(playerItems[0]),
           items: playerItems,
         },
-        preCondition: {
+        pre_condition: {
           headers: vueTableHeader(preConditionItems[0]),
           items: preConditionItems,
         },
-        postCondition: {
+        post_condition: {
           headers: vueTableHeader(postConditionItems[0]),
           items: postConditionItems,
         },
@@ -221,6 +259,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
   <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+  <link href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
   <style>
     /* テスト手順の表に縦線を入れる */
@@ -288,7 +327,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               </v-card-title>
               <v-card-subtitle></v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :headers="preCondition.headers" :items="preCondition.items" :disable-sort="true"
+                <v-data-table dense :headers="pre_condition.headers" :items="pre_condition.items" :disable-sort="true"
                   fixed-header disable-pagination hide-default-footer></v-data-table>
               </v-card-text>
             </v-card>
@@ -300,7 +339,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               </v-card-title>
               <v-card-subtitle></v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :headers="postCondition.headers" :items="postCondition.items" :disable-sort="true"
+                <v-data-table dense :headers="post_condition.headers" :items="post_condition.items" :disable-sort="true"
                   fixed-header disable-pagination hide-default-footer></v-data-table>
               </v-card-text>
             </v-card>
@@ -315,7 +354,21 @@ export class UsecaseTestCommand implements base.SpecCommand {
               <v-card-subtitle>○のついたフローを縦方向に進めてください</v-card-subtitle>
               <v-card-text>
                 <v-data-table dense :headers="step.headers" :items="step.items" :disable-sort="true" fixed-header
-                  disable-pagination hide-default-footer></v-data-table>
+                  disable-pagination hide-default-footer>
+                  <template v-slot:item.flow_id="{ item }">
+
+                    <v-tooltip bottom v-if="item.branch_type != 'none'" >
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-icon v-if="item.branch_type == 'basic'" v-bind="attrs" v-on="on">mdi-arrow-right-thick</v-icon>
+                        <v-icon v-if="item.branch_type == 'alt'" v-bind="attrs" v-on="on" color="green darken-2">mdi-arrow-right-thick</v-icon>
+                        <v-icon v-if="item.branch_type == 'ex'" v-bind="attrs" v-on="on" color="orange darken-5">mdi-arrow-right-thick</v-icon>
+                      </template>
+                      <div>{{ item.tooltips }}</div>
+                    </v-tooltip>
+
+                    {{ item.flow_id }}
+                  </template>
+                </v-data-table>
               </v-card-text>
             </v-card>
           </v-col>
@@ -329,7 +382,11 @@ export class UsecaseTestCommand implements base.SpecCommand {
   <script>
     new Vue({
       el: '#app',
-      vuetify: new Vuetify(),
+      vuetify: new Vuetify({
+        icons: {
+          iconfont: 'fa',
+        },
+      }),
       data() {
         return <%- data %>;
       },
