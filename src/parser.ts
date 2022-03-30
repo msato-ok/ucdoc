@@ -14,6 +14,9 @@ interface IAppProps {
   usecases: {
     [key: string]: IUseCaseProps;
   };
+  factors: {
+    [key: string]: IFactorProps;
+  };
   glossaries: {
     [key: string]: {
       [key: string]: IGlossaryProps;
@@ -43,6 +46,9 @@ export interface IUseCaseProps {
   exceptionFlows: {
     [key: string]: IExceptionFlowProps;
   };
+  valiations: {
+    [key: string]: IValiationProps;
+  };
 }
 
 interface IPrePostConditionProps {
@@ -68,22 +74,27 @@ interface IAlternateFlowProps extends IAltExFlowProps {
 
 type IExceptionFlowProps = IAltExFlowProps;
 
-// interface IPictProps {
-//   sourceFlowIds: string[];
-//   factors: IPictFactorProps[];
-//   constraint: string;
-//   flowChangePatterns: IPictFlowChangePatternProps[];
-// }
+interface IValiationProps {
+  inputPointIds: string[];
+  factorIds: string[];
+  pictConstraint: string;
+  results: {
+    [key: string]: IValiationResultProps;
+  };
+}
 
-// interface IPictFactorProps {
-//   name: string;
-//   items: string[];
-// }
+interface IFactorProps {
+  name: string;
+  items: string[];
+}
 
-// interface IPictFlowChangePatternProps {
-//   conditions: IPictFactorProps[];
-//   nextFlowId: string;
-// }
+interface IValiationResultProps {
+  resultType: string;
+  patterns?: {
+    [key: string]: string[];
+  };
+  moveFlowId: string;
+}
 
 interface IScenarioProps {
   name: string;
@@ -122,8 +133,11 @@ function parseApp(data: IAppProps, ucGlossaries?: Map<string, Set<spec.Glossary>
   actorDic.addAll(actors);
 
   const glossaries: spec.GlossaryCollection = parseGlossary(data);
+  const factors: spec.Factor[] = parseFactor(data);
+  const factorDic = new spec.Cache<spec.Factor>();
+  factorDic.addAll(factors);
 
-  const usecases: spec.UseCase[] = parseUsecase(data, actorDic, glossaries, ucGlossaries);
+  const usecases: spec.UseCase[] = parseUsecase(data, actorDic, factorDic, glossaries, ucGlossaries);
   const usecasesDic = new spec.Cache<spec.UseCase>();
   usecasesDic.addAll(usecases);
 
@@ -163,9 +177,27 @@ function parseActor(data: IAppProps): spec.Actor[] {
   return actors;
 }
 
+function parseFactor(data: IAppProps): spec.Factor[] {
+  const factors: spec.Factor[] = [];
+  for (const [id, props] of Object.entries(data.factors)) {
+    let name = id;
+    if (props.name) {
+      name = props.name;
+    }
+    const items = [];
+    for (const item of props.items) {
+      items.push(new spec.FactorItem(item));
+    }
+    const o = new spec.Factor(new spec.FactorId(id), new spec.Name(name), items);
+    factors.push(o);
+  }
+  return factors;
+}
+
 function parseUsecase(
   data: IAppProps,
   actorDic: spec.Cache<spec.Actor>,
+  factorDic: spec.Cache<spec.Factor>,
   glossaries: spec.GlossaryCollection,
   ucGlossaries?: Map<string, Set<spec.Glossary>>
 ): spec.UseCase[] {
@@ -174,6 +206,8 @@ function parseUsecase(
   for (const [id, props] of Object.entries(data.usecases)) {
     const path = basePath.concat([id]);
     const preConditions: spec.PreCondition[] = parsePrePostCondition(spec.PreCondition, props.preConditions);
+    const preConditionDic = new spec.Cache<spec.PreCondition>();
+    preConditionDic.addAll(preConditions);
     const postConditions: spec.PostCondition[] = parsePrePostCondition(spec.PostCondition, props.postConditions);
     const basicFlows: spec.Flow[] = parseBasicFlows(
       path.concat(['basicFlows']),
@@ -206,26 +240,37 @@ function parseUsecase(
       }
     }
 
-    usecases.push(
-      new spec.UseCase(
-        new spec.UseCaseId(id),
-        new spec.Name(props.name),
-        new spec.Summary(props.summary),
-        preConditions,
-        postConditions,
-        new spec.FlowCollection(basicFlows),
-        alternateFlows,
-        exceptionFlows,
-        glossariesInUc
-      )
+    const valiations: spec.Valiation[] = parseValiations(
+      path.concat(['valiations']),
+      props.valiations,
+      preConditionDic,
+      basicFlowDic,
+      alternateFlows,
+      exceptionFlows,
+      factorDic
     );
+
+    const usecase = new spec.UseCase(
+      new spec.UseCaseId(id),
+      new spec.Name(props.name),
+      new spec.Summary(props.summary),
+      preConditions,
+      postConditions,
+      new spec.FlowCollection(basicFlows),
+      alternateFlows,
+      exceptionFlows,
+      valiations,
+      glossariesInUc
+    );
+
+    usecases.push(usecase);
   }
   return usecases;
 }
 
 /*
  * ■ ctor について補足
- * generics で new したい (`a = new T(id, desc);`) ときのやり方になっている。
+ * generics で new したい (`a = new T(id, desc);`) ときの HACK である。
  * https://qiita.com/ConquestArrow/items/ace6d926b7e89b8f92d9
  */
 function parsePrePostCondition<T extends spec.PrePostCondition>(
@@ -339,6 +384,128 @@ function parseExceptionFlows(
     }
   }
   return new spec.AltExFlowCollection<spec.ExceptionFlow>(flows);
+}
+
+function parseValiations(
+  path: string[],
+  valiationPropsArray: Record<string, IValiationProps>,
+  preConditionDic: spec.Cache<spec.PreCondition>,
+  basicFlowDic: spec.Cache<spec.Flow>,
+  alternateFlows: spec.AltExFlowCollection<spec.AlternateFlow>,
+  exceptionFlows: spec.AltExFlowCollection<spec.ExceptionFlow>,
+  factorDic: spec.Cache<spec.Factor>
+): spec.Valiation[] {
+  const valiations: spec.Valiation[] = [];
+  if (valiationPropsArray) {
+    for (const [id, props] of Object.entries(valiationPropsArray)) {
+      const currPath = path.concat([id]);
+      const sourceFlows: spec.Flow[] = [];
+      const sourcePreConds: spec.PreCondition[] = [];
+      for (const id of props.inputPointIds) {
+        const cond = preConditionDic.get(new spec.PrePostConditionId(id));
+        if (cond) {
+          sourcePreConds.push(cond);
+        }
+        const flow = basicFlowDic.get(new spec.FlowId(id));
+        if (flow) {
+          sourceFlows.push(flow);
+        }
+      }
+      if (sourcePreConds.length == 0 && sourceFlows.length == 0) {
+        const errPathText = currPath.concat(['inputPointIds']).join('/');
+        throw new common.ParseError(`${errPathText} の ${id} は preConditions および basicFlows に未定義です。`);
+      }
+      const factors = [];
+      const factorInValiation = new spec.Cache<spec.Factor>();
+      for (const factorId of props.factorIds) {
+        const factor = factorDic.get(new spec.FactorId(factorId));
+        if (!factor) {
+          const errPathText = currPath.concat(['factorIds']).join('/');
+          throw new common.ParseError(`${errPathText} の ${factorId} は未定義です。`);
+        }
+        factors.push(factor);
+        factorInValiation.add(factor);
+      }
+      const results = [];
+      for (const [resultId, resultProps] of Object.entries(props.results)) {
+        const vr = parseValiationResult(
+          currPath,
+          resultId,
+          resultProps,
+          basicFlowDic,
+          alternateFlows,
+          exceptionFlows,
+          factorInValiation
+        );
+        results.push(vr);
+      }
+      const valiation = new spec.Valiation(
+        new spec.ValiationId(id),
+        sourceFlows,
+        factors,
+        new spec.PictConstraint(props.pictConstraint),
+        results
+      );
+      valiations.push(valiation);
+    }
+  }
+  return valiations;
+}
+
+function parseValiationResult(
+  path: string[],
+  resultId: string,
+  resultProps: IValiationResultProps,
+  basicFlowDic: spec.Cache<spec.Flow>,
+  alternateFlows: spec.AltExFlowCollection<spec.AlternateFlow>,
+  exceptionFlows: spec.AltExFlowCollection<spec.ExceptionFlow>,
+  factorInValiation: spec.Cache<spec.Factor>
+): spec.ValiationResult {
+  const patterns = [];
+  if (resultProps.patterns) {
+    for (const [factorId, factorItems] of Object.entries(resultProps.patterns)) {
+      const factor = factorInValiation.get(factorId);
+      const patternsPaths = path.concat(['results', resultId, 'patterns']);
+      if (!factor) {
+        const errPathText = patternsPaths.join('/');
+        throw new common.ParseError(`${errPathText} の ${factorId} は factorIds の中で未定義です。`);
+      }
+      const items = [];
+      for (const item of factorItems) {
+        let found = false;
+        for (const fItem of factor.items) {
+          if (fItem.text == item) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          const errPathText = patternsPaths.concat([factorId]).join('/');
+          throw new common.ParseError(`${errPathText} の ${item} は factors/${factorId}/items の中で未定義です。`);
+        }
+        items.push(new spec.FactorItem(item));
+      }
+      const pattern = new spec.FactorPattern(factor, items);
+      patterns.push(pattern);
+    }
+  }
+  let moveFlow: spec.Flow | spec.AbstractAltExFlow | undefined = basicFlowDic.get(resultProps.moveFlowId);
+  if (!moveFlow) {
+    moveFlow = alternateFlows.get(resultProps.moveFlowId);
+  }
+  if (!moveFlow) {
+    moveFlow = exceptionFlows.get(resultProps.moveFlowId);
+  }
+  if (!moveFlow) {
+    const errPathText = path.concat(['results', resultId, 'moveFlowId']).join('/');
+    throw new common.ParseError(`${errPathText} の ${resultProps.moveFlowId} は未定義です。`);
+  }
+  return new spec.ValiationResult(
+    new spec.ValiationResultId(resultId),
+    resultProps.resultType as spec.ResultType,
+    patterns,
+    moveFlow
+  );
 }
 
 function parseScenarios(data: IAppProps, usecasesDic: spec.Cache<spec.UseCase>): spec.Scenario[] {

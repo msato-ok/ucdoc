@@ -15,175 +15,211 @@ export class UsecaseTestCommand implements base.SpecCommand {
   }
 
   private writeUc(app: spec.App, uc: spec.UseCase) {
-    interface ISummaryItem {
-      summaryId: string;
+    // html のタグの属性名が小文字になっていることから、ブラウザは、タグの属性を小文字しか認識しない
+    // https://github.com/vuejs/vue/issues/9528#issuecomment-718400487
+    // そのため vue.js のカスマムタグも、キャメルケースじゃなくて、すべて小文字にする必要がある。
+    // 例えば、このようなタグで、 item.calories が属性として使われる。
+    //   <template v-slot:item.caloryValue="{ item }">
+    //     <v-chip
+    //       :color="getColor(item.caloryValue)"
+    //       dark
+    //     >
+    //       {{ item.calories }}
+    //     </v-chip>
+    //   </template>
+    // この例では、item.caloryValue に template が反応しないが、calory_value に変えると機能する。
+    // とてもハマりやすい。どのデータがタグ上の属性として使われるかは、実装しながら変わるので、
+    // html に出現するアイテムは、すべて小文字で実装する。
+
+    interface IScenarioItem {
+      scenario_id: string;
       type: string;
       usecase: string;
       desc: string;
     }
-    const summaryIdPrefix = 'TP';
-    const summaryItems: ISummaryItem[] = [];
-    const baseSummaryItem: ISummaryItem = {
-      summaryId: `${summaryIdPrefix}01`,
+    const scenarioIdPrefix = 'TP';
+    const scenarioItems: IScenarioItem[] = [];
+    const baseScenarioItem: IScenarioItem = {
+      scenario_id: `${scenarioIdPrefix}01`,
       type: '正常系',
       usecase: '基本フロー',
       desc: '正常に実行されて事後条件が成立する状態',
     };
-    summaryItems.push(baseSummaryItem);
-    const altexSummryMap = new Map<spec.AbstractAltExFlow, ISummaryItem>();
+    scenarioItems.push(baseScenarioItem);
+    const altexScenarioMap = new Map<spec.AbstractAltExFlow, IScenarioItem>();
     for (const altFlow of uc.alternateFlows.flows) {
-      const summaryCount = summaryItems.length + 1;
-      const item: ISummaryItem = {
-        summaryId: `${summaryIdPrefix}${util.zeropad(summaryCount, 2)}`,
+      const scenarioCount = scenarioItems.length + 1;
+      const item: IScenarioItem = {
+        scenario_id: `${scenarioIdPrefix}${util.zeropad(scenarioCount, 2)}`,
         type: '準正常系',
         usecase: `代替フロー(${altFlow.id.toString})`,
         desc: altFlow.description.text,
       };
-      summaryItems.push(item);
-      altexSummryMap.set(altFlow, item);
+      scenarioItems.push(item);
+      altexScenarioMap.set(altFlow, item);
     }
     for (const exFlow of uc.exceptionFlows.flows) {
-      const summaryCount = summaryItems.length + 1;
-      const item: ISummaryItem = {
-        summaryId: `${summaryIdPrefix}${util.zeropad(summaryCount, 2)}`,
+      const scenarioCount = scenarioItems.length + 1;
+      const item: IScenarioItem = {
+        scenario_id: `${scenarioIdPrefix}${util.zeropad(scenarioCount, 2)}`,
         type: '異常系',
         usecase: `例外フロー(${exFlow.id.toString})`,
         desc: exFlow.description.text,
       };
-      summaryItems.push(item);
-      altexSummryMap.set(exFlow, item);
+      scenarioItems.push(item);
+      altexScenarioMap.set(exFlow, item);
     }
     interface IPlayerItem {
-      playerId: string;
+      player_id: string;
       desc: string;
     }
     const playerItems: IPlayerItem[] = [];
     for (const player of uc.players) {
       playerItems.push({
-        playerId: player.id.toString,
+        player_id: player.id.toString,
         desc: player.text,
       });
     }
     interface IPreConditionItem {
-      preConditionId: string;
+      pre_condition_id: string;
       desc: string;
     }
     const preConditionItems: IPreConditionItem[] = [];
     for (const cond of uc.preConditions) {
       preConditionItems.push({
-        preConditionId: cond.id.toString,
+        pre_condition_id: cond.id.toString,
         desc: cond.description.text,
       });
     }
     interface IPostConditionItem {
-      postConditionId: string;
+      post_condition_id: string;
       desc: string;
     }
     const postConditionItems: IPostConditionItem[] = [];
     for (const cond of uc.postConditions) {
       postConditionItems.push({
-        postConditionId: cond.id.toString,
+        post_condition_id: cond.id.toString,
         desc: cond.description.text,
       });
     }
-    interface ITestStep {
-      flowId: string;
-      desc: string;
-      summaries: Map<ISummaryItem, string>;
+    type BranchType = 'none' | 'basic' | 'alt' | 'ex';
+    interface IStep {
+      branchType: BranchType;
+      flow: spec.Flow;
+      scenarios: Map<IScenarioItem, string>;
+      tooltips: string;
     }
-    const testSteps: ITestStep[] = [];
+    const testSteps: IStep[] = [];
     const onMark = '○';
-    function initSummaries(): Map<ISummaryItem, string> {
-      const summaries = new Map<ISummaryItem, string>();
-      for (const summary of summaryItems) {
-        summaries.set(summary, '');
+    function initScenarios(): Map<IScenarioItem, string> {
+      const scenarios = new Map<IScenarioItem, string>();
+      for (const scenario of scenarioItems) {
+        scenarios.set(scenario, '');
       }
-      return summaries;
+      return scenarios;
     }
-    // summaryStartFlow には、代替フルーからの戻り先の基本フローがセットされる。
-    // 基本フローのループ bFlow が summaryStartFlow に到達するまでは、処理されない。
-    // summaryStartFlow にそもそも登録がない場合は、戻り先を制御する必要がないことを意味する。
+    // scenarioStartFlow には、代替フルーからの戻り先の基本フローがセットされる。
+    // 基本フローのループ bFlow が scenarioStartFlow に到達するまでは、処理されない。
+    // scenarioStartFlow にそもそも登録がない場合は、戻り先を制御する必要がないことを意味する。
     // 例外フローは、基本フローに戻ることがないので、以降のループで出現することのない bFlow を
     // セットして、マーキングされることがないようにする。
-    const summaryStartFlow = new Map<ISummaryItem, spec.Flow>();
+    const scenarioStartFlow = new Map<IScenarioItem, spec.Flow>();
     for (const bFlow of uc.basicFlows.flows) {
-      const stepItem: ITestStep = {
-        flowId: bFlow.id.toString,
-        desc: bFlow.description.text,
-        summaries: initSummaries(),
+      const stepItem: IStep = {
+        branchType: bFlow.refFlows.length > 0 ? 'basic' : 'none',
+        flow: bFlow,
+        scenarios: initScenarios(),
+        tooltips: '',
       };
+      if (stepItem.branchType == 'basic') {
+        stepItem.tooltips = '基本フローの分岐パターン';
+      }
       testSteps.push(stepItem);
       // bFlow を実行するテストケース（テスト手順で○になるもの）を、
-      // markingSummaries 配列に残す。
+      // markingScenarios 配列に残す。
       // 最初は、全テストケースを入れておいて、ループしながら消す
-      const markingSummaries = Array.from(stepItem.summaries.keys());
+      const markingScenarios = Array.from(stepItem.scenarios.keys());
       for (const refFlow of bFlow.refFlows) {
-        const summary = altexSummryMap.get(refFlow);
-        if (!summary) {
-          throw new Error('summary が altexSummryMap の中にない状態はバグ');
+        const scenario = altexScenarioMap.get(refFlow);
+        if (!scenario) {
+          throw new Error('scenario が altexScenarioMap の中にない状態はバグ');
         }
         // フローが分岐する場合、分岐先のテストケースは、○にならないので削除する
-        for (let i = 0; i < markingSummaries.length; i++) {
-          const refSummary = altexSummryMap.get(refFlow);
-          if (markingSummaries[i] == refSummary) {
-            markingSummaries.splice(i, i + 1);
+        for (let i = 0; i < markingScenarios.length; i++) {
+          const refScenario = altexScenarioMap.get(refFlow);
+          if (markingScenarios[i] == refScenario) {
+            markingScenarios.splice(i, i + 1);
           }
         }
+        const branchType = refFlow instanceof spec.AlternateFlow ? 'alt' : 'ex';
         for (const nFlow of refFlow.nextFlows.flows) {
-          const nStep = {
-            flowId: nFlow.id.toString,
-            desc: nFlow.description.text,
-            summaries: initSummaries(),
+          const nStep: IStep = {
+            branchType: branchType,
+            flow: nFlow,
+            scenarios: initScenarios(),
+            tooltips: `${scenario.usecase}の分岐パターン`,
           };
           // 分岐先のフローは、常に1つのテストケースしか○にならない
-          nStep.summaries.set(summary, onMark);
+          nStep.scenarios.set(scenario, onMark);
           testSteps.push(nStep);
         }
         if (refFlow instanceof spec.AlternateFlow) {
           const altFlow: spec.AlternateFlow = refFlow;
-          summaryStartFlow.set(summary, altFlow.returnFlow);
+          scenarioStartFlow.set(scenario, altFlow.returnFlow);
         } else {
-          summaryStartFlow.set(summary, bFlow);
+          scenarioStartFlow.set(scenario, bFlow);
         }
       }
-      for (const markSummary of markingSummaries) {
-        const startFlow = summaryStartFlow.get(markSummary);
+      for (const markScenario of markingScenarios) {
+        const startFlow = scenarioStartFlow.get(markScenario);
         if (startFlow) {
           if (startFlow != bFlow) {
             continue;
           }
-          summaryStartFlow.delete(markSummary);
+          scenarioStartFlow.delete(markScenario);
         }
-        stepItem.summaries.set(markSummary, onMark);
+        stepItem.scenarios.set(markScenario, onMark);
       }
     }
+    // テスト手順はテストシナリオが横列で動的にプロパティが増えるので連想配列に入れ直す
     const testStepJsons = [];
     for (const testStep of testSteps) {
       const testStepJson: Record<string, string> = {};
-      testStepJson['flowId'] = testStep.flowId;
-      testStep.summaries.forEach((mark: string, summary: ISummaryItem) => {
-        testStepJson[summary.summaryId] = mark;
+      testStepJson['flow_id'] = testStep.flow.id.toString;
+      testStep.scenarios.forEach((mark: string, scenario: IScenarioItem) => {
+        testStepJson[scenario.scenario_id] = mark;
       });
-      testStepJson['desc'] = testStep.desc;
+      testStepJson['player_id'] = testStep.flow.player.id.toString;
+      testStepJson['desc'] = testStep.flow.description.text;
+      testStepJson['branch_type'] = testStep.branchType;
+      testStepJson['tooltips'] = testStep.tooltips;
       testStepJsons.push(testStepJson);
     }
-    const headerText: Record<string, string> = {
-      summaryId: 'No',
+    // v-data-table のデータは、headers に無くて、items にだけあるプロパティは、
+    // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
+    // ヘッダー構成に出力しないようにする。
+    const headerText: Record<string, string | null> = {
+      scenario_id: 'No',
       type: '分類',
       usecase: 'ユースケース',
       desc: '説明',
-      playerId: 'ID',
-      preConditionId: 'ID',
-      postConditionId: 'ID',
-      flowId: 'フローID',
+      player_id: 'Player ID',
+      pre_condition_id: 'ID',
+      post_condition_id: 'ID',
+      flow_id: 'フローID',
+      branch_type: null,
+      tooltips: null,
     };
-    for (const summary of summaryItems) {
-      headerText[summary.summaryId] = summary.summaryId;
+    for (const scenario of scenarioItems) {
+      headerText[scenario.scenario_id] = scenario.scenario_id;
     }
     function vueTableHeader(item: any) {
       const data = [];
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      for (const key of item.keys()) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      for (const key of Object.keys(item)) {
+        if (headerText[key] === null) {
+          continue;
+        }
         data.push({
           value: key,
           text: headerText[key],
@@ -193,19 +229,19 @@ export class UsecaseTestCommand implements base.SpecCommand {
     }
     const data = {
       data: JSON.stringify({
-        summary: {
-          headers: vueTableHeader(summaryItems[0]),
-          items: summaryItems,
+        scenario: {
+          headers: vueTableHeader(scenarioItems[0]),
+          items: scenarioItems,
         },
         player: {
           headers: vueTableHeader(playerItems[0]),
           items: playerItems,
         },
-        preCondition: {
+        pre_condition: {
           headers: vueTableHeader(preConditionItems[0]),
           items: preConditionItems,
         },
-        postCondition: {
+        post_condition: {
           headers: vueTableHeader(postConditionItems[0]),
           items: postConditionItems,
         },
@@ -223,6 +259,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
   <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+  <link href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
   <style>
     /* テスト手順の表に縦線を入れる */
@@ -230,13 +267,18 @@ export class UsecaseTestCommand implements base.SpecCommand {
     #test-step table th {
       border-left: thin solid rgba(0, 0, 0, .12);
       /* 横線を消す */
-      border-bottom: none;
+      /*border-bottom: none;*/
     }
-
+    /* 表の外枠線を描く */
     #test-step table {
       border-top: thin solid rgba(0, 0, 0, .12);
       border-bottom: thin solid rgba(0, 0, 0, .12);
       border-right: thin solid rgba(0, 0, 0, .12);
+    }
+    /* テスト手順の表の偶数列をグレーにする */
+    #test-step table td:nth-child(2n),
+    #test-step table th:nth-child(2n) {
+      background-color: #EEEEEE;
     }
   </style>
 </head>
@@ -259,7 +301,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               </v-card-title>
               <v-card-subtitle>ユースケースのフローの分岐を網羅します。</v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :headers="summary.headers" :items="summary.items" :disable-sort="true"
+                <v-data-table dense :headers="scenario.headers" :items="scenario.items" :disable-sort="true"
                   disable-pagination hide-default-footer></v-data-table>
               </v-card-text>
             </v-card>
@@ -271,7 +313,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               <v-card-title class="text-h6">
                 Player
               </v-card-title>
-              <v-card-subtitle>テストに登場するアクターやシステム</v-card-subtitle>
+              <v-card-subtitle>テストに登場するアクターとシステム</v-card-subtitle>
               <v-card-text>
                 <v-data-table dense :headers="player.headers" :items="player.items" :disable-sort="true"
                   disable-pagination hide-default-footer></v-data-table>
@@ -285,7 +327,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               </v-card-title>
               <v-card-subtitle></v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :headers="preCondition.headers" :items="preCondition.items" :disable-sort="true"
+                <v-data-table dense :headers="pre_condition.headers" :items="pre_condition.items" :disable-sort="true"
                   fixed-header disable-pagination hide-default-footer></v-data-table>
               </v-card-text>
             </v-card>
@@ -297,7 +339,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
               </v-card-title>
               <v-card-subtitle></v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :headers="postCondition.headers" :items="postCondition.items" :disable-sort="true"
+                <v-data-table dense :headers="post_condition.headers" :items="post_condition.items" :disable-sort="true"
                   fixed-header disable-pagination hide-default-footer></v-data-table>
               </v-card-text>
             </v-card>
@@ -309,10 +351,24 @@ export class UsecaseTestCommand implements base.SpecCommand {
               <v-card-title class="text-h6">
                 テスト手順
               </v-card-title>
-              <v-card-subtitle>分岐パターンのテストを実施するときに、事前条件を準備する</v-card-subtitle>
+              <v-card-subtitle>○のついたフローを縦方向に進めてください</v-card-subtitle>
               <v-card-text>
                 <v-data-table dense :headers="step.headers" :items="step.items" :disable-sort="true" fixed-header
-                  disable-pagination hide-default-footer></v-data-table>
+                  disable-pagination hide-default-footer>
+                  <template v-slot:item.flow_id="{ item }">
+
+                    <v-tooltip bottom v-if="item.branch_type != 'none'" >
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-icon v-if="item.branch_type == 'basic'" v-bind="attrs" v-on="on">mdi-arrow-right-thick</v-icon>
+                        <v-icon v-if="item.branch_type == 'alt'" v-bind="attrs" v-on="on" color="green darken-2">mdi-arrow-right-thick</v-icon>
+                        <v-icon v-if="item.branch_type == 'ex'" v-bind="attrs" v-on="on" color="orange darken-5">mdi-arrow-right-thick</v-icon>
+                      </template>
+                      <div>{{ item.tooltips }}</div>
+                    </v-tooltip>
+
+                    {{ item.flow_id }}
+                  </template>
+                </v-data-table>
               </v-card-text>
             </v-card>
           </v-col>
@@ -326,7 +382,11 @@ export class UsecaseTestCommand implements base.SpecCommand {
   <script>
     new Vue({
       el: '#app',
-      vuetify: new Vuetify(),
+      vuetify: new Vuetify({
+        icons: {
+          iconfont: 'fa',
+        },
+      }),
       data() {
         return <%- data %>;
       },
