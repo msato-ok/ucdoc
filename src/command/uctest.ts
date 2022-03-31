@@ -5,185 +5,337 @@ import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
 
-export class UsecaseTestCommand implements base.SpecCommand {
-  constructor(private output: string) {}
+// html のタグの属性名が小文字になっていることから、ブラウザは、タグの属性を小文字しか認識しない
+// https://github.com/vuejs/vue/issues/9528#issuecomment-718400487
+// そのため vue.js のカスマムタグも、キャメルケースじゃなくて、すべて小文字にする必要がある。
+// 例えば、このようなタグで、 item.calories が属性として使われる。
+//   <template v-slot:item.caloryValue="{ item }">
+//     <v-chip
+//       :color="getColor(item.caloryValue)"
+//       dark
+//     >
+//       {{ item.calories }}
+//     </v-chip>
+//   </template>
+// この例では、item.caloryValue に template が反応しないが、calory_value に変えると機能する。
+// とてもハマりやすい。どのデータがタグ上の属性として使われるかは、実装しながら変わるので、
+// html に出現するアイテムは、すべて小文字で実装する。
 
-  public execute(spc: spec.App): void {
-    spc.usecases.forEach(uc => {
-      this.writeUc(spc, uc);
-    });
+interface IScenarioItem {
+  scenario_id: string;
+  type: string;
+  usecase: string;
+  desc: string;
+}
+
+class ScenarioSection {
+  private _items: IScenarioItem[] = [];
+  private _branchFlowScenarioRelation = new Map<spec.AbstractAltExFlow, IScenarioItem>();
+
+  constructor(readonly baseItem: IScenarioItem) {
+    this._items.push(baseItem);
   }
 
-  private writeUc(app: spec.App, uc: spec.UseCase) {
-    // html のタグの属性名が小文字になっていることから、ブラウザは、タグの属性を小文字しか認識しない
-    // https://github.com/vuejs/vue/issues/9528#issuecomment-718400487
-    // そのため vue.js のカスマムタグも、キャメルケースじゃなくて、すべて小文字にする必要がある。
-    // 例えば、このようなタグで、 item.calories が属性として使われる。
-    //   <template v-slot:item.caloryValue="{ item }">
-    //     <v-chip
-    //       :color="getColor(item.caloryValue)"
-    //       dark
-    //     >
-    //       {{ item.calories }}
-    //     </v-chip>
-    //   </template>
-    // この例では、item.caloryValue に template が反応しないが、calory_value に変えると機能する。
-    // とてもハマりやすい。どのデータがタグ上の属性として使われるかは、実装しながら変わるので、
-    // html に出現するアイテムは、すべて小文字で実装する。
+  get items(): IScenarioItem[] {
+    return this._items;
+  }
 
-    interface IScenarioItem {
-      scenario_id: string;
-      type: string;
-      usecase: string;
-      desc: string;
-    }
+  addBranchItem(flow: spec.AbstractAltExFlow, item: IScenarioItem) {
+    this._items.push(item);
+    this._branchFlowScenarioRelation.set(flow, item);
+  }
+
+  getByFlow(flow: spec.AbstractAltExFlow): IScenarioItem | undefined {
+    return this._branchFlowScenarioRelation.get(flow);
+  }
+}
+
+class ScenarioSectionFactory {
+  static getInstance(uc: spec.UseCase): ScenarioSection {
     const scenarioIdPrefix = 'TP';
-    const scenarioItems: IScenarioItem[] = [];
-    const baseScenarioItem: IScenarioItem = {
+    const scenarioSection = new ScenarioSection({
       scenario_id: `${scenarioIdPrefix}01`,
       type: '正常系',
       usecase: '基本フロー',
       desc: '正常に実行されて事後条件が成立する状態',
-    };
-    scenarioItems.push(baseScenarioItem);
-    const altexScenarioMap = new Map<spec.AbstractAltExFlow, IScenarioItem>();
+    });
     for (const altFlow of uc.alternateFlows.flows) {
-      const scenarioCount = scenarioItems.length + 1;
+      const scenarioCount = scenarioSection.items.length + 1;
       const item: IScenarioItem = {
         scenario_id: `${scenarioIdPrefix}${util.zeropad(scenarioCount, 2)}`,
         type: '準正常系',
         usecase: `代替フロー(${altFlow.id.toString})`,
         desc: altFlow.description.text,
       };
-      scenarioItems.push(item);
-      altexScenarioMap.set(altFlow, item);
+      scenarioSection.addBranchItem(altFlow, item);
     }
     for (const exFlow of uc.exceptionFlows.flows) {
-      const scenarioCount = scenarioItems.length + 1;
+      const scenarioCount = scenarioSection.items.length + 1;
       const item: IScenarioItem = {
         scenario_id: `${scenarioIdPrefix}${util.zeropad(scenarioCount, 2)}`,
         type: '異常系',
         usecase: `例外フロー(${exFlow.id.toString})`,
         desc: exFlow.description.text,
       };
-      scenarioItems.push(item);
-      altexScenarioMap.set(exFlow, item);
+      scenarioSection.addBranchItem(exFlow, item);
     }
-    interface IPlayerItem {
-      player_id: string;
-      desc: string;
-    }
-    const playerItems: IPlayerItem[] = [];
+    return scenarioSection;
+  }
+}
+
+interface IPlayerItem {
+  player_id: string;
+  desc: string;
+}
+
+class SimpleItemSection<T> {
+  private _items: T[];
+
+  constructor() {
+    this._items = <T[]>[];
+  }
+
+  get items(): T[] {
+    return this._items;
+  }
+
+  add(item: T) {
+    this._items.push(item);
+  }
+}
+
+class PlayerSectionFactory {
+  static getInstance(uc: spec.UseCase): SimpleItemSection<IPlayerItem> {
+    const section = new SimpleItemSection<IPlayerItem>();
     for (const player of uc.players) {
-      playerItems.push({
+      section.add({
         player_id: player.id.toString,
         desc: player.text,
       });
     }
-    interface IPreConditionItem {
-      pre_condition_id: string;
-      desc: string;
-    }
-    const preConditionItems: IPreConditionItem[] = [];
+    return section;
+  }
+}
+
+interface IPreConditionItem {
+  pre_condition_id: string;
+  desc: string;
+}
+
+class PreConditionSectionFactory {
+  static getInstance(uc: spec.UseCase): SimpleItemSection<IPreConditionItem> {
+    const section = new SimpleItemSection<IPreConditionItem>();
     for (const cond of uc.preConditions) {
-      preConditionItems.push({
+      section.add({
         pre_condition_id: cond.id.toString,
         desc: cond.description.text,
       });
     }
-    interface IPostConditionItem {
-      post_condition_id: string;
-      desc: string;
-    }
-    const postConditionItems: IPostConditionItem[] = [];
+    return section;
+  }
+}
+
+interface IPostConditionItem {
+  post_condition_id: string;
+  desc: string;
+}
+
+class PostConditionSectionFactory {
+  static getInstance(uc: spec.UseCase): SimpleItemSection<IPostConditionItem> {
+    const section = new SimpleItemSection<IPostConditionItem>();
     for (const cond of uc.postConditions) {
-      postConditionItems.push({
+      section.add({
         post_condition_id: cond.id.toString,
         desc: cond.description.text,
       });
     }
-    type BranchType = 'none' | 'basic' | 'alt' | 'ex';
-    interface IScenarioOutline {
-      branchType: BranchType;
-      flow: spec.Flow;
-      scenarios: Map<IScenarioItem, string>;
-      tooltips: string;
-    }
-    const testScenarioOutlines: IScenarioOutline[] = [];
+    return section;
+  }
+}
+
+// 分岐タイプ
+// シナリオフローのところにフローの分岐アイコンを表示するが、
+// そのアイコンの種別
+type BranchType = 'none' | 'basic' | 'alt' | 'ex';
+
+interface IScenarioOutline {
+  branchType: BranchType;
+  flow: spec.Flow;
+  scenarios: Map<IScenarioItem, string>;
+  tooltips: string;
+}
+
+/**
+ * シナリオフローのセクションのデータ
+ *
+ * 縦にユースケースのフロー、横にシナリオの表を作って、
+ * シナリオを進める上で、実行されるフローが何かを示すための表で、
+ * マーカー（○）を付けて、フローの流れがわかるようにする。
+ *
+ * 横列は scenarioSection.items になる。
+ * 縦行は、基本フローと代替フロー、例外フローが重複無く漏れ無く並んでいく。
+ */
+class ScenarioOutlineSection {
+  private _items: IScenarioOutline[];
+
+  constructor() {
+    this._items = <IScenarioOutline[]>[];
+  }
+
+  get items(): IScenarioOutline[] {
+    return this._items;
+  }
+
+  add(item: IScenarioOutline) {
+    this._items.push(item);
+  }
+}
+
+class ScenarioOutlineSectionFactory {
+  static getInstance(uc: spec.UseCase, scenarioSection: ScenarioSection): ScenarioOutlineSection {
+    const scenarioOutlineSection = new ScenarioOutlineSection();
     const onMark = '○';
-    function initScenarios(): Map<IScenarioItem, string> {
-      const scenarios = new Map<IScenarioItem, string>();
-      for (const scenario of scenarioItems) {
-        scenarios.set(scenario, '');
-      }
-      return scenarios;
-    }
-    // scenarioStartFlow には、代替フルーからの戻り先の基本フローがセットされる。
-    // 基本フローのループ bFlow が scenarioStartFlow に到達するまでは、処理されない。
-    // scenarioStartFlow にそもそも登録がない場合は、戻り先を制御する必要がないことを意味する。
-    // 例外フローは、基本フローに戻ることがないので、以降のループで出現することのない bFlow を
-    // セットして、マーキングされることがないようにする。
-    const scenarioStartFlow = new Map<IScenarioItem, spec.Flow>();
+    // scenarioRetartPos の使い方
+    // これには、代替フローからの戻り先の基本フローがセットされ、フローの再開位置を表す。
+    //
+    // key: シナリオ
+    // value: 分岐した代替・例外フローから再開する基本フローが入る
+    //
+    // この Map にエントリーされていない状態は、そのシナリオは、まだ分岐していない状態なので、
+    // 再開位置を気にする必要がない。
+    //
+    // scenarioRetartPos にシナリオのエントリーがある場合には、 bFlow が一致するかを確認して、
+    // 一致しない場合には、まだ再開するフローの位置に到達していないので、そのシナリオ列は ○ にならない。
+    // 再開するフローが一致するか、あるいは、Map にエントリーされていない場合には、 markingScenarios に従って、
+    // ○ 付け判定する。
+    //
+    // 尚、例外フローは、基本フローに戻ることがないので、以降のループで出現することのないので、
+    // 現在行の bFlow を再開位置としてセットして、再開されることがない状態にする。
+    //
+    // markingScenarios の使い方
+    // この配列を、基本フロー（bFlow）の行の横列のシナリオのマス目に見立てて使う。
+    // 配列の中にシナリオIDがある場合は ○ になる。
+    // 配列の初期状態では、基本フロー（bFlow）が、全シナリオで実行される（○になる）状態にして、
+    // 分岐する代替・例外フローを走査して、代替・例外フローに対応したシナリオを配列から削除する
+    const scenarioRestartPos = new Map<IScenarioItem, spec.Flow>();
     for (const bFlow of uc.basicFlows.flows) {
-      const scenarioOutline: IScenarioOutline = {
-        branchType: bFlow.refFlows.length > 0 ? 'basic' : 'none',
-        flow: bFlow,
-        scenarios: initScenarios(),
-        tooltips: '',
-      };
-      if (scenarioOutline.branchType == 'basic') {
-        scenarioOutline.tooltips = '基本フローの分岐パターン';
-      }
-      testScenarioOutlines.push(scenarioOutline);
-      // bFlow を実行するテストケース（テスト手順で○になるもの）を、
-      // markingScenarios 配列に残す。
-      // 最初は、全テストケースを入れておいて、ループしながら消す
+      const scenarioOutline = this.appendBaseFlow(scenarioOutlineSection, bFlow, scenarioSection);
       const markingScenarios = Array.from(scenarioOutline.scenarios.keys());
       for (const refFlow of bFlow.refFlows) {
-        const scenario = altexScenarioMap.get(refFlow);
+        const refScenarioOutlines = this.appendRefFlow(scenarioOutlineSection, refFlow, scenarioSection);
+        const scenario = scenarioSection.getByFlow(refFlow);
         if (!scenario) {
-          throw new Error('scenario が altexScenarioMap の中にない状態はバグ');
-        }
-        // フローが分岐する場合、分岐先のテストケースは、○にならないので削除する
-        for (let i = 0; i < markingScenarios.length; i++) {
-          const refScenario = altexScenarioMap.get(refFlow);
-          if (markingScenarios[i] == refScenario) {
-            markingScenarios.splice(i, i + 1);
-          }
-        }
-        const branchType = refFlow instanceof spec.AlternateFlow ? 'alt' : 'ex';
-        for (const nFlow of refFlow.nextFlows.flows) {
-          const nextScenarioOutline: IScenarioOutline = {
-            branchType: branchType,
-            flow: nFlow,
-            scenarios: initScenarios(),
-            tooltips: `${scenario.usecase}の分岐パターン`,
-          };
-          // 分岐先のフローは、常に1つのテストケースしか○にならない
-          nextScenarioOutline.scenarios.set(scenario, onMark);
-          testScenarioOutlines.push(nextScenarioOutline);
+          throw new Error('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
         }
         if (refFlow instanceof spec.AlternateFlow) {
           const altFlow: spec.AlternateFlow = refFlow;
-          scenarioStartFlow.set(scenario, altFlow.returnFlow);
+          scenarioRestartPos.set(scenario, altFlow.returnFlow);
         } else {
-          scenarioStartFlow.set(scenario, bFlow);
+          scenarioRestartPos.set(scenario, bFlow);
+        }
+        // シナリオは、分岐パターン毎に1つなので、フローが分岐する場合、
+        // この段階で分岐先シナリオに ○ をつける。
+        // また、分岐先シナリオ以外の、他の分岐シナリオのマスを空白にする
+        for (const rso of refScenarioOutlines) {
+          rso.scenarios.set(scenario, onMark);
+        }
+        for (let i = 0; i < markingScenarios.length; i++) {
+          const refScenario = scenarioSection.getByFlow(refFlow);
+          if (markingScenarios[i] == refScenario) {
+            delete markingScenarios[i];
+          }
         }
       }
       for (const markScenario of markingScenarios) {
-        const startFlow = scenarioStartFlow.get(markScenario);
+        if (!markScenario) {
+          continue;
+        }
+        const startFlow = scenarioRestartPos.get(markScenario);
         if (startFlow) {
           if (startFlow != bFlow) {
             continue;
           }
-          scenarioStartFlow.delete(markScenario);
+          scenarioRestartPos.delete(markScenario);
         }
         scenarioOutline.scenarios.set(markScenario, onMark);
       }
     }
+    return scenarioOutlineSection;
+  }
+
+  /* 表の横列をマーカー無しの状態に初期化する */
+  private static initTableColumns(scenarioSection: ScenarioSection): Map<IScenarioItem, string> {
+    const scenarios = new Map<IScenarioItem, string>();
+    for (const scenario of scenarioSection.items) {
+      scenarios.set(scenario, '');
+    }
+    return scenarios;
+  }
+
+  private static appendBaseFlow(
+    scenarioOutlineSection: ScenarioOutlineSection,
+    bFlow: spec.Flow,
+    scenarioSection: ScenarioSection
+  ): IScenarioOutline {
+    const branchType = bFlow.refFlows.length > 0 ? 'basic' : 'none';
+    const scenarioOutline: IScenarioOutline = {
+      branchType: branchType,
+      flow: bFlow,
+      scenarios: this.initTableColumns(scenarioSection),
+      tooltips: '',
+    };
+    if (branchType == 'basic') {
+      scenarioOutline.tooltips = '基本フローの分岐パターン';
+    }
+    scenarioOutlineSection.add(scenarioOutline);
+    return scenarioOutline;
+  }
+
+  private static appendRefFlow(
+    scenarioOutlineSection: ScenarioOutlineSection,
+    refFlow: spec.AbstractAltExFlow,
+    scenarioSection: ScenarioSection
+  ): IScenarioOutline[] {
+    const scenario = scenarioSection.getByFlow(refFlow);
+    if (!scenario) {
+      throw new Error('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
+    }
+    const items: IScenarioOutline[] = [];
+    const branchType = refFlow instanceof spec.AlternateFlow ? 'alt' : 'ex';
+    for (const nFlow of refFlow.nextFlows.flows) {
+      const scenarioOutline: IScenarioOutline = {
+        branchType: branchType,
+        flow: nFlow,
+        scenarios: this.initTableColumns(scenarioSection),
+        tooltips: `${scenario.usecase}の分岐パターン`,
+      };
+      scenarioOutlineSection.add(scenarioOutline);
+      items.push(scenarioOutline);
+    }
+    return items;
+  }
+}
+
+export class UsecaseTestCommand implements base.SpecCommand {
+  constructor(private output: string) {}
+
+  public execute(app: spec.App): void {
+    app.usecases.forEach(uc => {
+      const data = this.assembleData(uc);
+      this.write(uc.id.toString, data);
+    });
+  }
+
+  private assembleData(uc: spec.UseCase): string {
+    const scenarioSection = ScenarioSectionFactory.getInstance(uc);
+    const playerSection = PlayerSectionFactory.getInstance(uc);
+    const preConditionSection = PreConditionSectionFactory.getInstance(uc);
+    const postConditionSection = PostConditionSectionFactory.getInstance(uc);
+    const scenarioOutlineSection = ScenarioOutlineSectionFactory.getInstance(uc, scenarioSection);
+
     // テストシナリオのフローはテストシナリオが横列で動的にプロパティが増えるので連想配列に入れ直す
     const scenarioOutlineJsons = [];
-    for (const scenarioOutline of testScenarioOutlines) {
+    for (const scenarioOutline of scenarioOutlineSection.items) {
       const dic: Record<string, string> = {};
       dic['flow_id'] = scenarioOutline.flow.id.toString;
       scenarioOutline.scenarios.forEach((mark: string, scenario: IScenarioItem) => {
@@ -210,7 +362,7 @@ export class UsecaseTestCommand implements base.SpecCommand {
       branch_type: null,
       tooltips: null,
     };
-    for (const scenario of scenarioItems) {
+    for (const scenario of scenarioSection.items) {
       headerText[scenario.scenario_id] = scenario.scenario_id;
     }
     function vueTableHeader(item: any) {
@@ -220,6 +372,9 @@ export class UsecaseTestCommand implements base.SpecCommand {
         if (headerText[key] === null) {
           continue;
         }
+        if (!headerText[key]) {
+          throw new Error(`v-data-table 用のヘッダーがない。headerTextに追加してください。: ${key}`);
+        }
         data.push({
           value: key,
           text: headerText[key],
@@ -227,30 +382,32 @@ export class UsecaseTestCommand implements base.SpecCommand {
       }
       return data;
     }
-    const data = {
-      data: JSON.stringify({
-        scenario: {
-          headers: vueTableHeader(scenarioItems[0]),
-          items: scenarioItems,
-        },
-        player: {
-          headers: vueTableHeader(playerItems[0]),
-          items: playerItems,
-        },
-        pre_condition: {
-          headers: vueTableHeader(preConditionItems[0]),
-          items: preConditionItems,
-        },
-        post_condition: {
-          headers: vueTableHeader(postConditionItems[0]),
-          items: postConditionItems,
-        },
-        scenario_outline: {
-          headers: vueTableHeader(scenarioOutlineJsons[0]),
-          items: scenarioOutlineJsons,
-        },
-      }),
-    };
+    return JSON.stringify({
+      scenario: {
+        headers: vueTableHeader(scenarioSection.items[0]),
+        items: scenarioSection.items,
+      },
+      player: {
+        headers: vueTableHeader(playerSection.items[0]),
+        items: playerSection.items,
+      },
+      pre_condition: {
+        headers: vueTableHeader(preConditionSection.items[0]),
+        items: preConditionSection.items,
+      },
+      post_condition: {
+        headers: vueTableHeader(postConditionSection.items[0]),
+        items: postConditionSection.items,
+      },
+      scenario_outline: {
+        headers: vueTableHeader(scenarioOutlineJsons[0]),
+        items: scenarioOutlineJsons,
+      },
+      uc: uc,
+    });
+  }
+
+  private write(ucId: string, jsondata: string) {
     const template = `
 <!DOCTYPE html>
 <html>
@@ -413,8 +570,8 @@ export class UsecaseTestCommand implements base.SpecCommand {
 </html>
 %>
 `;
-    const mdtext = ejs.render(template.trimStart(), data, {});
-    const mdpath = path.join(this.output, `${uc.id.toString}.html`);
+    const mdtext = ejs.render(template.trimStart(), { data: jsondata }, {});
+    const mdpath = path.join(this.output, `${ucId}.html`);
     fs.writeFileSync(mdpath, mdtext);
   }
 }
