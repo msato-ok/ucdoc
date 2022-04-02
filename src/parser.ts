@@ -439,11 +439,13 @@ function parseValiations(
         );
         results.push(vr);
       }
+      const pictCombi = spec.PictCombiFactory.getInstance(factors);
       const valiation = new spec.Valiation(
         new spec.ValiationId(id),
         sourceFlows,
         factors,
         new spec.PictConstraint(props.pictConstraint),
+        pictCombi,
         results
       );
       valiations.push(valiation);

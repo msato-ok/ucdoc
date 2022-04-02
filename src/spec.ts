@@ -1,4 +1,8 @@
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 import * as common from './common';
+import conf from './conf';
 
 abstract class UniqueId {
   constructor(readonly id: string) {}
@@ -362,14 +366,25 @@ export class AltExFlowCollection<T extends AbstractAltExFlow> {
 export class ValiationId extends UniqueId {}
 
 export class Valiation extends Entity {
+  private _combinations: Map<Factor, FactorItem[]> = new Map<Factor, FactorItem[]>();
+
   constructor(
     readonly id: ValiationId,
     readonly sourceFlows: Flow[],
     readonly factors: Factor[],
     readonly pictConstraint: PictConstraint,
+    readonly pictCombination: Map<Factor, FactorItem[]>,
     readonly results: ValiationResult[]
   ) {
     super(id);
+  }
+
+  getCombination(factor: Factor): FactorItem[] {
+    const items = this._combinations.get(factor);
+    if (!items) {
+      throw new Error(`キーがない。ここの例外はバグ: key=${factor.id.toString}`);
+    }
+    return items;
   }
 }
 
@@ -515,6 +530,76 @@ export class GlossaryCollection {
 }
 
 type Player = Actor | Glossary;
+
+export class PictCombiFactory {
+  private static _seq = 0;
+
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  private constructor() {}
+
+  static getInstance(factors: Factor[]): Map<Factor, FactorItem[]> {
+    this._seq++;
+    // pict には、文字列のエスケープルールがわからないので、
+    // 置換文字に変換してパラメータファイルを作成する
+    const inpRows = [];
+    let factorNo = 0;
+    for (const factor of factors) {
+      const itemIds = [...factor.items].map((_, i) => `i${i}`); //=> [ 0, 1, 2, 3, 4 ]
+      inpRows.push(`f${factorNo}: ${itemIds.join(', ')}\n`);
+      factorNo++;
+    }
+    const pictInText = inpRows.join('');
+    const pictInPath = path.join(conf.tmpDir, `${this._seq}.pict.in`);
+    fs.writeFileSync(pictInPath, pictInText);
+    // pict を実行して stdout に出力された結果を yml の定義名に変換する
+    // 例） 先頭行が factorId で 2行目以降が item
+    // f0	f1
+    // i1	i0
+    // i1	i2
+    const pictOutText = execSync(`pict ${pictInPath}`);
+    const outRows = pictOutText.toString().split(/\n/);
+    let head = true;
+    const pictCombi = new Map<Factor, FactorItem[]>();
+    for (const row of outRows) {
+      if (row == '') {
+        continue;
+      }
+      const cols = row.split(/\t/);
+      if (cols.length != factors.length) {
+        throw new Error(`pict の出力が想定されたものと違う(カラム数): ${cols.length} != ${factors.length}`);
+      }
+      if (head) {
+        head = false;
+        factorNo = 0;
+        for (const col of cols) {
+          if (col != `f${factorNo}`) {
+            throw new Error(`pict の出力が想定されたものと違う: ${col}`);
+          }
+          factorNo++;
+        }
+        continue;
+      }
+      factorNo = 0;
+      for (const col of cols) {
+        const factor = factors[factorNo];
+        if (col.indexOf('i') == 0) {
+          const itemNo = Number(col.substring(1));
+          const item = factor.items[itemNo];
+          let items = pictCombi.get(factor);
+          if (!items) {
+            items = [];
+            pictCombi.set(factor, items);
+          }
+          items.push(item);
+        } else {
+          throw new Error('not implement');
+        }
+        factorNo++;
+      }
+    }
+    return pictCombi;
+  }
+}
 
 type WalkCallback = (obj: Record<string, unknown>, path: string[], name: string, val: unknown) => void;
 

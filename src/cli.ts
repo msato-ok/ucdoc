@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { SpecCommand } from './command/base';
 import { UsecaseCommand } from './command/usecase';
 import { UsecaseTestCommand } from './command/uctest';
+import { PictCommand } from './command/pict';
 import * as parser from './parser';
 
 const packageJson = require('../package.json');
@@ -28,6 +29,16 @@ program
   .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
     const output = options['output'];
     const command = new UsecaseTestCommand(output);
+    executeCommand(file, otherFiles, command);
+  });
+
+program
+  .command('pict <file> [otherFiles...]')
+  .description('generate pict result using markdown')
+  .requiredOption('-o, --output <directory>', 'output directory')
+  .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
+    const output = options['output'];
+    const command = new PictCommand(output);
     executeCommand(file, otherFiles, command);
   });
 

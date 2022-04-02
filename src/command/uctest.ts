@@ -158,7 +158,7 @@ class PostConditionSectionFactory {
 // そのアイコンの種別
 type BranchType = 'none' | 'basic' | 'alt' | 'ex';
 
-interface IScenarioOutline {
+interface IScenarioFlow {
   branchType: BranchType;
   flow: spec.Flow;
   scenarios: Map<IScenarioItem, string>;
@@ -175,25 +175,25 @@ interface IScenarioOutline {
  * 横列は scenarioSection.items になる。
  * 縦行は、基本フローと代替フロー、例外フローが重複無く漏れ無く並んでいく。
  */
-class ScenarioOutlineSection {
-  private _items: IScenarioOutline[];
+class ScenarioFlowSection {
+  private _items: IScenarioFlow[];
 
   constructor() {
-    this._items = <IScenarioOutline[]>[];
+    this._items = <IScenarioFlow[]>[];
   }
 
-  get items(): IScenarioOutline[] {
+  get items(): IScenarioFlow[] {
     return this._items;
   }
 
-  add(item: IScenarioOutline) {
+  add(item: IScenarioFlow) {
     this._items.push(item);
   }
 }
 
-class ScenarioOutlineSectionFactory {
-  static getInstance(uc: spec.UseCase, scenarioSection: ScenarioSection): ScenarioOutlineSection {
-    const scenarioOutlineSection = new ScenarioOutlineSection();
+class ScenarioFlowSectionFactory {
+  static getInstance(uc: spec.UseCase, scenarioSection: ScenarioSection): ScenarioFlowSection {
+    const scenarioFlowSection = new ScenarioFlowSection();
     const onMark = '○';
     // scenarioRetartPos の使い方
     // これには、代替フローからの戻り先の基本フローがセットされ、フローの再開位置を表す。
@@ -219,10 +219,10 @@ class ScenarioOutlineSectionFactory {
     // 分岐する代替・例外フローを走査して、代替・例外フローに対応したシナリオを配列から削除する
     const scenarioRestartPos = new Map<IScenarioItem, spec.Flow>();
     for (const bFlow of uc.basicFlows.flows) {
-      const scenarioOutline = this.appendBaseFlow(scenarioOutlineSection, bFlow, scenarioSection);
-      const markingScenarios = Array.from(scenarioOutline.scenarios.keys());
+      const scenarioFlow = this.appendBaseFlow(scenarioFlowSection, bFlow, scenarioSection);
+      const markingScenarios = Array.from(scenarioFlow.scenarios.keys());
       for (const refFlow of bFlow.refFlows) {
-        const refScenarioOutlines = this.appendRefFlow(scenarioOutlineSection, refFlow, scenarioSection);
+        const refScenarioFlows = this.appendRefFlow(scenarioFlowSection, refFlow, scenarioSection);
         const scenario = scenarioSection.getByFlow(refFlow);
         if (!scenario) {
           throw new Error('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
@@ -236,7 +236,7 @@ class ScenarioOutlineSectionFactory {
         // シナリオは、分岐パターン毎に1つなので、フローが分岐する場合、
         // この段階で分岐先シナリオに ○ をつける。
         // また、分岐先シナリオ以外の、他の分岐シナリオのマスを空白にする
-        for (const rso of refScenarioOutlines) {
+        for (const rso of refScenarioFlows) {
           rso.scenarios.set(scenario, onMark);
         }
         for (let i = 0; i < markingScenarios.length; i++) {
@@ -257,10 +257,10 @@ class ScenarioOutlineSectionFactory {
           }
           scenarioRestartPos.delete(markScenario);
         }
-        scenarioOutline.scenarios.set(markScenario, onMark);
+        scenarioFlow.scenarios.set(markScenario, onMark);
       }
     }
-    return scenarioOutlineSection;
+    return scenarioFlowSection;
   }
 
   /* 表の横列をマーカー無しの状態に初期化する */
@@ -273,44 +273,44 @@ class ScenarioOutlineSectionFactory {
   }
 
   private static appendBaseFlow(
-    scenarioOutlineSection: ScenarioOutlineSection,
+    scenarioFlowSection: ScenarioFlowSection,
     bFlow: spec.Flow,
     scenarioSection: ScenarioSection
-  ): IScenarioOutline {
+  ): IScenarioFlow {
     const branchType = bFlow.refFlows.length > 0 ? 'basic' : 'none';
-    const scenarioOutline: IScenarioOutline = {
+    const scenarioFlow: IScenarioFlow = {
       branchType: branchType,
       flow: bFlow,
       scenarios: this.initTableColumns(scenarioSection),
       tooltips: '',
     };
     if (branchType == 'basic') {
-      scenarioOutline.tooltips = '基本フローの分岐パターン';
+      scenarioFlow.tooltips = '基本フローの分岐パターン';
     }
-    scenarioOutlineSection.add(scenarioOutline);
-    return scenarioOutline;
+    scenarioFlowSection.add(scenarioFlow);
+    return scenarioFlow;
   }
 
   private static appendRefFlow(
-    scenarioOutlineSection: ScenarioOutlineSection,
+    scenarioFlowSection: ScenarioFlowSection,
     refFlow: spec.AbstractAltExFlow,
     scenarioSection: ScenarioSection
-  ): IScenarioOutline[] {
+  ): IScenarioFlow[] {
     const scenario = scenarioSection.getByFlow(refFlow);
     if (!scenario) {
       throw new Error('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
     }
-    const items: IScenarioOutline[] = [];
+    const items: IScenarioFlow[] = [];
     const branchType = refFlow instanceof spec.AlternateFlow ? 'alt' : 'ex';
     for (const nFlow of refFlow.nextFlows.flows) {
-      const scenarioOutline: IScenarioOutline = {
+      const scenarioFlow: IScenarioFlow = {
         branchType: branchType,
         flow: nFlow,
         scenarios: this.initTableColumns(scenarioSection),
         tooltips: `${scenario.usecase}の分岐パターン`,
       };
-      scenarioOutlineSection.add(scenarioOutline);
-      items.push(scenarioOutline);
+      scenarioFlowSection.add(scenarioFlow);
+      items.push(scenarioFlow);
     }
     return items;
   }
@@ -331,21 +331,21 @@ export class UsecaseTestCommand implements base.SpecCommand {
     const playerSection = PlayerSectionFactory.getInstance(uc);
     const preConditionSection = PreConditionSectionFactory.getInstance(uc);
     const postConditionSection = PostConditionSectionFactory.getInstance(uc);
-    const scenarioOutlineSection = ScenarioOutlineSectionFactory.getInstance(uc, scenarioSection);
+    const scenarioFlowSection = ScenarioFlowSectionFactory.getInstance(uc, scenarioSection);
 
     // テストシナリオのフローはテストシナリオが横列で動的にプロパティが増えるので連想配列に入れ直す
-    const scenarioOutlineJsons = [];
-    for (const scenarioOutline of scenarioOutlineSection.items) {
+    const scenarioFlowJsons = [];
+    for (const scenarioFlow of scenarioFlowSection.items) {
       const dic: Record<string, string> = {};
-      dic['flow_id'] = scenarioOutline.flow.id.toString;
-      scenarioOutline.scenarios.forEach((mark: string, scenario: IScenarioItem) => {
+      dic['flow_id'] = scenarioFlow.flow.id.toString;
+      scenarioFlow.scenarios.forEach((mark: string, scenario: IScenarioItem) => {
         dic[scenario.scenario_id] = mark;
       });
-      dic['player_id'] = scenarioOutline.flow.player.id.toString;
-      dic['desc'] = scenarioOutline.flow.description.text;
-      dic['branch_type'] = scenarioOutline.branchType;
-      dic['tooltips'] = scenarioOutline.tooltips;
-      scenarioOutlineJsons.push(dic);
+      dic['player_id'] = scenarioFlow.flow.player.id.toString;
+      dic['desc'] = scenarioFlow.flow.description.text;
+      dic['branch_type'] = scenarioFlow.branchType;
+      dic['tooltips'] = scenarioFlow.tooltips;
+      scenarioFlowJsons.push(dic);
     }
     // v-data-table のデータは、headers に無くて、items にだけあるプロパティは、
     // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
@@ -399,9 +399,9 @@ export class UsecaseTestCommand implements base.SpecCommand {
         headers: vueTableHeader(postConditionSection.items[0]),
         items: postConditionSection.items,
       },
-      scenario_outline: {
-        headers: vueTableHeader(scenarioOutlineJsons[0]),
-        items: scenarioOutlineJsons,
+      scenario_flow: {
+        headers: vueTableHeader(scenarioFlowJsons[0]),
+        items: scenarioFlowJsons,
       },
       uc: uc,
     });
@@ -420,21 +420,21 @@ export class UsecaseTestCommand implements base.SpecCommand {
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
   <style>
     /* テストシナリオフローの表に縦線を入れる */
-    #test-scenario-outline table td,
-    #test-scenario-outline table th {
+    #test-scenario-flow table td,
+    #test-scenario-flow table th {
       border-left: thin solid rgba(0, 0, 0, .12);
       /* 横線を消す */
       /*border-bottom: none;*/
     }
     /* 表の外枠線を描く */
-    #test-scenario-outline table {
+    #test-scenario-flow table {
       border-top: thin solid rgba(0, 0, 0, .12);
       border-bottom: thin solid rgba(0, 0, 0, .12);
       border-right: thin solid rgba(0, 0, 0, .12);
     }
     /* テスト手順の表の偶数列をグレーにする */
-    #test-scenario-outline table td:nth-child(2n),
-    #test-scenario-outline table th:nth-child(2n) {
+    #test-scenario-flow table td:nth-child(2n),
+    #test-scenario-flow table th:nth-child(2n) {
       background-color: #EEEEEE;
     }
   </style>
@@ -504,13 +504,42 @@ export class UsecaseTestCommand implements base.SpecCommand {
         </v-row>
         <v-row>
           <v-col cols="12">
-            <v-card id="test-scenario-outline">
+            <v-card id="test-scenario-flow">
               <v-card-title class="text-h6">
                 テストシナリオのフロー
               </v-card-title>
               <v-card-subtitle>○のついたフローを縦方向に進めてください</v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :headers="scenario_outline.headers" :items="scenario_outline.items" :disable-sort="true" fixed-header
+                <v-data-table dense :headers="scenario_flow.headers" :items="scenario_flow.items" :disable-sort="true" fixed-header
+                  disable-pagination hide-default-footer>
+                  <template v-slot:item.flow_id="{ item }">
+
+                    <v-tooltip bottom v-if="item.branch_type != 'none'" >
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-icon v-if="item.branch_type == 'basic'" v-bind="attrs" v-on="on">mdi-arrow-right-thick</v-icon>
+                        <v-icon v-if="item.branch_type == 'alt'" v-bind="attrs" v-on="on" color="green darken-2">mdi-arrow-right-thick</v-icon>
+                        <v-icon v-if="item.branch_type == 'ex'" v-bind="attrs" v-on="on" color="orange darken-5">mdi-arrow-right-thick</v-icon>
+                      </template>
+                      <div>{{ item.tooltips }}</div>
+                    </v-tooltip>
+
+                    {{ item.flow_id }}
+                  </template>
+                </v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+        <v-row v-for="s_item in scenario.items">
+          <v-col cols="12">
+            <v-card class="test-step">
+              <v-card-title class="text-h6">
+                テスト手順 {{ s_item.scenario_id }}
+              </v-card-title>
+              <v-card-subtitle>フロー: {{ s_item.usecase }}</v-card-subtitle>
+              <v-card-subtitle>{{ s_item.desc }}</v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :headers="step.headers" :items="step.items" :disable-sort="true" fixed-header
                   disable-pagination hide-default-footer>
                   <template v-slot:item.flow_id="{ item }">
 
