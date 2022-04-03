@@ -3,6 +3,7 @@ import { SpecCommand } from './command/base';
 import { UsecaseCommand } from './command/usecase';
 import { UsecaseTestCommand } from './command/uctest';
 import { PictCommand } from './command/pict';
+import { DecisionCommand } from './command/decision';
 import * as parser from './parser';
 
 const packageJson = require('../package.json');
@@ -14,7 +15,7 @@ program.name('ucdoc').version(version);
 
 program
   .command('usecase <file> [otherFiles...]')
-  .description('generate use case description documents using markdown')
+  .description('generate use case description documents')
   .requiredOption('-o, --output <directory>', 'output directory')
   .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
     const output = options['output'];
@@ -24,7 +25,7 @@ program
 
 program
   .command('uctest <file> [otherFiles...]')
-  .description('generate uctest documents using html')
+  .description('generate uctest documents')
   .requiredOption('-o, --output <directory>', 'output directory')
   .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
     const output = options['output'];
@@ -34,11 +35,21 @@ program
 
 program
   .command('pict <file> [otherFiles...]')
-  .description('generate pict result using markdown')
+  .description('generate pict combination')
   .requiredOption('-o, --output <directory>', 'output directory')
   .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
     const output = options['output'];
     const command = new PictCommand(output);
+    executeCommand(file, otherFiles, command);
+  });
+
+program
+  .command('decision <file> [otherFiles...]')
+  .description('generate decision table')
+  .requiredOption('-o, --output <directory>', 'output directory')
+  .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
+    const output = options['output'];
+    const command = new DecisionCommand(output);
     executeCommand(file, otherFiles, command);
   });
 

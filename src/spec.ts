@@ -379,6 +379,16 @@ export class Valiation extends Entity {
     super(id);
   }
 
+  get combinationItemCount(): number {
+    // 組み合わせ数は、どの factor のものでも同じなので、
+    // 0 番目のものを使って調べる
+    const combi = this.pictCombination.get(this.factors[0]);
+    if (!combi) {
+      throw new Error('ここでエラーになるのはバグ');
+    }
+    return combi.length;
+  }
+
   getCombination(factor: Factor): FactorItem[] {
     const items = this._combinations.get(factor);
     if (!items) {

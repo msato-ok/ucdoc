@@ -24,22 +24,15 @@ export class PictCommand implements base.SpecCommand {
     const fids = valiation.factors.map(x => x.id.toString);
     lines.push('|' + fids.join('|') + '|');
     lines.push('|' + th.join('|') + '|');
-    // combiCount について
-    // 組み合わせ数（縦（行）のループ数）は、どの factor のものでも同じなので、
-    // 0 番目のものを使って調べる
-    const combi = valiation.pictCombination.get(valiation.factors[0]);
-    if (!combi) {
-      throw new Error('ここでエラーになるのはバグ');
-    }
-    const combiCount = combi.length;
-    for (let itemNo = 0; itemNo < combiCount; itemNo++) {
+    const itemCount = valiation.combinationItemCount;
+    for (let itemNo = 0; itemNo < itemCount; itemNo++) {
       const iids = [];
       for (const factor of valiation.factors) {
-        const combi = valiation.pictCombination.get(factor);
-        if (!combi) {
+        const items = valiation.pictCombination.get(factor);
+        if (!items) {
           throw new Error('ここでエラーになるのはバグ');
         }
-        iids.push(combi[itemNo].text);
+        iids.push(items[itemNo].text);
       }
       lines.push('|' + iids.join('|') + '|');
     }
