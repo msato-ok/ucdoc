@@ -1,30 +1,32 @@
-import * as spec from '../spec';
-import * as base from './base';
+import { App } from '../spec/app';
+import { SpecCommand } from './base';
+import { UseCase } from '../spec/usecase';
+import { Valiation } from '../spec/valiation';
 import fs from 'fs';
 import path from 'path';
 
-export class PictCommand implements base.SpecCommand {
+export class PictCommand implements SpecCommand {
   constructor(private output: string) {}
 
-  public execute(spc: spec.App): void {
+  public execute(spc: App): void {
     spc.usecases.forEach(uc => {
       this.writeValiations(spc, uc);
     });
   }
 
-  private writeValiations(app: spec.App, uc: spec.UseCase) {
+  private writeValiations(app: App, uc: UseCase) {
     for (const valiation of uc.valiations) {
       this.writePict(valiation, uc);
     }
   }
 
-  private writePict(valiation: spec.Valiation, uc: spec.UseCase) {
+  private writePict(valiation: Valiation, uc: UseCase) {
     const lines = [];
     const th = valiation.factors.map(x => '-'.repeat(x.id.toString.length));
     const fids = valiation.factors.map(x => x.id.toString);
     lines.push('|' + fids.join('|') + '|');
     lines.push('|' + th.join('|') + '|');
-    const itemCount = valiation.combinationItemCount;
+    const itemCount = valiation.countOfPictPatterns;
     for (let itemNo = 0; itemNo < itemCount; itemNo++) {
       const iids = [];
       for (const factor of valiation.factors) {

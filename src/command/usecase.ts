@@ -1,20 +1,21 @@
-import * as spec from '../spec';
-import * as base from './base';
+import { UseCase } from '../spec/usecase';
 import yaml from 'js-yaml';
 import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
+import { App } from '../spec/app';
+import { SpecCommand } from './base';
 
-export class UsecaseCommand implements base.SpecCommand {
+export class UsecaseCommand implements SpecCommand {
   constructor(private output: string) {}
 
-  public execute(spc: spec.App): void {
+  public execute(spc: App): void {
     spc.usecases.forEach(uc => {
       this.writeUc(spc, uc);
     });
   }
 
-  private writeUc(app: spec.App, uc: spec.UseCase) {
+  private writeUc(app: App, uc: UseCase) {
     const basicFlowLines = [];
     const backLinks = new Set<string>();
     for (const flow of uc.basicFlows.flows) {

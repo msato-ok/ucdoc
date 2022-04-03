@@ -1,5 +1,5 @@
-import * as spec from '../spec';
+import { App } from '../spec/app';
 
 export interface SpecCommand {
-  execute(spec: spec.App): void;
+  execute(spec: App): void;
 }

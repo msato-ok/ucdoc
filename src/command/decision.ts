@@ -1,73 +1,63 @@
-import * as spec from '../spec';
-import * as base from './base';
+import { App } from '../spec/app';
+import { SpecCommand } from './base';
+import { UseCase } from '../spec/usecase';
+import { Valiation, DTConditionRuleChoice } from '../spec/valiation';
 import fs from 'fs';
 import path from 'path';
 
-export class DecisionCommand implements base.SpecCommand {
+export class DecisionCommand implements SpecCommand {
   constructor(private output: string) {}
 
-  public execute(spc: spec.App): void {
+  public execute(spc: App): void {
     spc.usecases.forEach(uc => {
       this.writeValiations(spc, uc);
     });
   }
 
-  private writeValiations(app: spec.App, uc: spec.UseCase) {
+  private writeValiations(app: App, uc: UseCase) {
     for (const valiation of uc.valiations) {
       this.writeDecisionTable(valiation, uc);
     }
   }
 
-  private writeDecisionTable(valiation: spec.Valiation, uc: spec.UseCase) {
+  private writeDecisionTable(valiation: Valiation, uc: UseCase) {
     const lines = [];
-    const combiCount = valiation.combinationItemCount;
+    const dTable = valiation.decisionTable;
     const head = [' ', ' ', ' '];
-    for (let i = 0; i < combiCount; i++) {
+    for (let i = 0; i < dTable.counfOfRules; i++) {
       head.push(`${i + 1}`);
     }
     lines.push('|' + head.join('|') + '|');
-    lines.push('|-|-|-|' + '-|'.repeat(combiCount));
+    lines.push('|-|-|-|' + '-|'.repeat(dTable.counfOfRules));
     let condTitleOut = false;
-    for (const factor of valiation.factors) {
-      const items = valiation.pictCombination.get(factor);
-      if (!items) {
-        throw new Error('ここでエラーになるのはバグ');
+    let prevFactorTitle = undefined;
+    for (const row of dTable.conditionRows) {
+      const cols = [];
+      if (!condTitleOut) {
+        cols.push('条件');
+        condTitleOut = true;
+      } else {
+        cols.push(' ');
       }
-      let titleOut = false;
-      const itemUniq = new Set<spec.FactorItem>();
-      for (const item of items) {
-        itemUniq.add(item);
+      if (prevFactorTitle != row.factor.id.toString) {
+        cols.push(row.factor.id.toString);
+      } else {
+        cols.push(' ');
       }
-      const sortedItems: spec.FactorItem[] = [];
-      for (const item of factor.items) {
-        if (itemUniq.has(item)) {
-          sortedItems.push(item);
-        }
-      }
-      for (const item of sortedItems) {
-        const cols = [];
-        if (!condTitleOut) {
-          cols.push('条件');
-          condTitleOut = true;
-        } else {
+      prevFactorTitle = row.factor.id.toString;
+      cols.push(row.item.text);
+      for (const rule of row.rules) {
+        if (rule == DTConditionRuleChoice.Yes) {
+          cols.push('Y');
+        } else if (rule == DTConditionRuleChoice.No) {
+          cols.push('N');
+        } else if (rule == DTConditionRuleChoice.None) {
           cols.push(' ');
-        }
-        if (!titleOut) {
-          cols.push(factor.id.toString);
         } else {
-          cols.push(' ');
+          throw new Error(`not implement: ${rule}`);
         }
-        cols.push(item.text);
-        for (const itemYN of items) {
-          if (itemYN == item) {
-            cols.push('Y');
-          } else {
-            cols.push(' ');
-          }
-        }
-        lines.push('|' + cols.join('|') + '|');
-        titleOut = true;
       }
+      lines.push('|' + cols.join('|') + '|');
     }
     const outPath = path.join(this.output, `${uc.id.toString}-${valiation.id.toString}.decision.md`);
     fs.writeFileSync(outPath, lines.join('\n') + '\n');

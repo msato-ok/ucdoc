@@ -4,7 +4,7 @@ import { UsecaseCommand } from './command/usecase';
 import { UsecaseTestCommand } from './command/uctest';
 import { PictCommand } from './command/pict';
 import { DecisionCommand } from './command/decision';
-import * as parser from './parser';
+import { parse } from './parser/parser';
 
 const packageJson = require('../package.json');
 const version: string = packageJson.version;
@@ -61,7 +61,7 @@ function executeCommand(file: string, otherFiles: string[], specCmd: SpecCommand
     if (otherFiles) {
       files = [...files, ...otherFiles];
     }
-    const s = parser.parse(files);
+    const s = parse(files);
     specCmd.execute(s);
   } catch (e) {
     console.error(e);

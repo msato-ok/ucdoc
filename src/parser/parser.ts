@@ -1,8 +1,36 @@
 import yaml from 'js-yaml';
 import fs from 'fs';
 import merge from 'ts-deepmerge';
-import * as spec from './spec';
-import * as common from './common';
+import { ParseError } from '../common';
+import { App } from '../spec/app';
+import { Actor, ActorId } from '../spec/actor';
+import { Cache } from '../spec/cache';
+import { Glossary, GlossaryId, GlossaryCollection, GlossaryCategory } from '../spec/glossary';
+import { Factor, FactorId, FactorItem, FactorPattern } from '../spec/valiation';
+import { UseCase, UseCaseId } from '../spec/usecase';
+import { Scenario, ScenarioId } from '../spec/scenario';
+import { Description, Name, Url, Summary, walkProps } from '../spec/core';
+import { PreCondition, PostCondition, PrePostCondition, PrePostConditionId } from '../spec/prepostcondition';
+import {
+  Flow,
+  FlowId,
+  AltExFlowCollection,
+  AlternateFlow,
+  AlternateFlowId,
+  ExceptionFlow,
+  ExceptionFlowId,
+  FlowCollection,
+  AbstractAltExFlow,
+} from '../spec/flow';
+import {
+  Valiation,
+  ValiationId,
+  PictConstraint,
+  ValiationResult,
+  ValiationResultId,
+  ResultType,
+  PictCombiFactory,
+} from '../spec/valiation';
 
 interface IAppProps {
   scenarios: {
@@ -109,7 +137,7 @@ interface IGlossaryProps {
   url?: string;
 }
 
-export function parse(yamlFiles: string[]): spec.App {
+export function parse(yamlFiles: string[]): App {
   let data = {} as IAppProps;
   for (const yml of yamlFiles) {
     const text = fs.readFileSync(yml, 'utf8');
@@ -127,58 +155,58 @@ export function parse(yamlFiles: string[]): spec.App {
   return app;
 }
 
-function parseApp(data: IAppProps, ucGlossaries?: Map<string, Set<spec.Glossary>>): spec.App {
-  const actors: spec.Actor[] = parseActor(data);
-  const actorDic = new spec.Cache<spec.Actor>();
+function parseApp(data: IAppProps, ucGlossaries?: Map<string, Set<Glossary>>): App {
+  const actors: Actor[] = parseActor(data);
+  const actorDic = new Cache<Actor>();
   actorDic.addAll(actors);
 
-  const glossaries: spec.GlossaryCollection = parseGlossary(data);
-  const factors: spec.Factor[] = parseFactor(data);
-  const factorDic = new spec.Cache<spec.Factor>();
+  const glossaries: GlossaryCollection = parseGlossary(data);
+  const factors: Factor[] = parseFactor(data);
+  const factorDic = new Cache<Factor>();
   factorDic.addAll(factors);
 
-  const usecases: spec.UseCase[] = parseUsecase(data, actorDic, factorDic, glossaries, ucGlossaries);
-  const usecasesDic = new spec.Cache<spec.UseCase>();
+  const usecases: UseCase[] = parseUsecase(data, actorDic, factorDic, glossaries, ucGlossaries);
+  const usecasesDic = new Cache<UseCase>();
   usecasesDic.addAll(usecases);
 
-  const scenarios: spec.Scenario[] = parseScenarios(data, usecasesDic);
+  const scenarios: Scenario[] = parseScenarios(data, usecasesDic);
 
-  return new spec.App(actors, usecases, scenarios, glossaries);
+  return new App(actors, usecases, scenarios, glossaries);
 }
 
-function parseGlossary(data: IAppProps): spec.GlossaryCollection {
-  const glossaries: spec.Glossary[] = [];
+function parseGlossary(data: IAppProps): GlossaryCollection {
+  const glossaries: Glossary[] = [];
   for (const [cat, glossariesByCat] of Object.entries(data.glossaries)) {
     for (const [id, props] of Object.entries(glossariesByCat)) {
-      let o: spec.Glossary;
+      let o: Glossary;
       if (!props) {
-        o = new spec.Glossary(new spec.GlossaryId(id), new spec.GlossaryCategory(cat));
+        o = new Glossary(new GlossaryId(id), new GlossaryCategory(cat));
       } else {
-        o = new spec.Glossary(
-          new spec.GlossaryId(id),
-          new spec.GlossaryCategory(cat),
-          props.name ? new spec.Name(props.name) : undefined,
-          props.desc ? new spec.Description(props.desc) : undefined,
-          props.url ? new spec.Url(props.url) : undefined
+        o = new Glossary(
+          new GlossaryId(id),
+          new GlossaryCategory(cat),
+          props.name ? new Name(props.name) : undefined,
+          props.desc ? new Description(props.desc) : undefined,
+          props.url ? new Url(props.url) : undefined
         );
       }
       glossaries.push(o);
     }
   }
-  return new spec.GlossaryCollection(glossaries);
+  return new GlossaryCollection(glossaries);
 }
 
-function parseActor(data: IAppProps): spec.Actor[] {
-  const actors: spec.Actor[] = [];
+function parseActor(data: IAppProps): Actor[] {
+  const actors: Actor[] = [];
   for (const [id, props] of Object.entries(data.actors)) {
-    const a = new spec.Actor(new spec.ActorId(id), new spec.Name(props.name));
+    const a = new Actor(new ActorId(id), new Name(props.name));
     actors.push(a);
   }
   return actors;
 }
 
-function parseFactor(data: IAppProps): spec.Factor[] {
-  const factors: spec.Factor[] = [];
+function parseFactor(data: IAppProps): Factor[] {
+  const factors: Factor[] = [];
   for (const [id, props] of Object.entries(data.factors)) {
     let name = id;
     if (props.name) {
@@ -186,9 +214,9 @@ function parseFactor(data: IAppProps): spec.Factor[] {
     }
     const items = [];
     for (const item of props.items) {
-      items.push(new spec.FactorItem(item));
+      items.push(new FactorItem(item));
     }
-    const o = new spec.Factor(new spec.FactorId(id), new spec.Name(name), items);
+    const o = new Factor(new FactorId(id), new Name(name), items);
     factors.push(o);
   }
   return factors;
@@ -196,35 +224,30 @@ function parseFactor(data: IAppProps): spec.Factor[] {
 
 function parseUsecase(
   data: IAppProps,
-  actorDic: spec.Cache<spec.Actor>,
-  factorDic: spec.Cache<spec.Factor>,
-  glossaries: spec.GlossaryCollection,
-  ucGlossaries?: Map<string, Set<spec.Glossary>>
-): spec.UseCase[] {
+  actorDic: Cache<Actor>,
+  factorDic: Cache<Factor>,
+  glossaries: GlossaryCollection,
+  ucGlossaries?: Map<string, Set<Glossary>>
+): UseCase[] {
   const basePath = ['usecases'];
-  const usecases: spec.UseCase[] = [];
+  const usecases: UseCase[] = [];
   for (const [id, props] of Object.entries(data.usecases)) {
     const path = basePath.concat([id]);
-    const preConditions: spec.PreCondition[] = parsePrePostCondition(spec.PreCondition, props.preConditions);
-    const preConditionDic = new spec.Cache<spec.PreCondition>();
+    const preConditions: PreCondition[] = parsePrePostCondition(PreCondition, props.preConditions);
+    const preConditionDic = new Cache<PreCondition>();
     preConditionDic.addAll(preConditions);
-    const postConditions: spec.PostCondition[] = parsePrePostCondition(spec.PostCondition, props.postConditions);
-    const basicFlows: spec.Flow[] = parseBasicFlows(
-      path.concat(['basicFlows']),
-      props.basicFlows,
-      actorDic,
-      glossaries
-    );
-    const basicFlowDic = new spec.Cache<spec.Flow>();
+    const postConditions: PostCondition[] = parsePrePostCondition(PostCondition, props.postConditions);
+    const basicFlows: Flow[] = parseBasicFlows(path.concat(['basicFlows']), props.basicFlows, actorDic, glossaries);
+    const basicFlowDic = new Cache<Flow>();
     basicFlowDic.addAll(basicFlows);
-    const alternateFlows: spec.AltExFlowCollection<spec.AlternateFlow> = parseAlternateFlows(
+    const alternateFlows: AltExFlowCollection<AlternateFlow> = parseAlternateFlows(
       path.concat(['alternateFlows']),
       props.alternateFlows,
       basicFlowDic,
       actorDic,
       glossaries
     );
-    const exceptionFlows: spec.AltExFlowCollection<spec.ExceptionFlow> = parseExceptionFlows(
+    const exceptionFlows: AltExFlowCollection<ExceptionFlow> = parseExceptionFlows(
       path.concat(['exceptionFlows']),
       props.exceptionFlows,
       basicFlowDic,
@@ -236,11 +259,11 @@ function parseUsecase(
     if (ucGlossaries) {
       const gset = ucGlossaries.get(id);
       if (gset) {
-        glossariesInUc = new spec.GlossaryCollection(Array.from(gset));
+        glossariesInUc = new GlossaryCollection(Array.from(gset));
       }
     }
 
-    const valiations: spec.Valiation[] = parseValiations(
+    const valiations: Valiation[] = parseValiations(
       path.concat(['valiations']),
       props.valiations,
       preConditionDic,
@@ -250,13 +273,13 @@ function parseUsecase(
       factorDic
     );
 
-    const usecase = new spec.UseCase(
-      new spec.UseCaseId(id),
-      new spec.Name(props.name),
-      new spec.Summary(props.summary),
+    const usecase = new UseCase(
+      new UseCaseId(id),
+      new Name(props.name),
+      new Summary(props.summary),
       preConditions,
       postConditions,
-      new spec.FlowCollection(basicFlows),
+      new FlowCollection(basicFlows),
       alternateFlows,
       exceptionFlows,
       valiations,
@@ -273,13 +296,13 @@ function parseUsecase(
  * generics で new したい (`a = new T(id, desc);`) ときの HACK である。
  * https://qiita.com/ConquestArrow/items/ace6d926b7e89b8f92d9
  */
-function parsePrePostCondition<T extends spec.PrePostCondition>(
-  ctor: { new (id: spec.PrePostConditionId, desc: spec.Description): T },
+function parsePrePostCondition<T extends PrePostCondition>(
+  ctor: { new (id: PrePostConditionId, desc: Description): T },
   conditionsProps: Record<string, IPrePostConditionProps>
 ): T[] {
   const conditions: T[] = [];
   for (const [id, props] of Object.entries(conditionsProps)) {
-    const a = new ctor(new spec.PrePostConditionId(id), new spec.Description(props.description));
+    const a = new ctor(new PrePostConditionId(id), new Description(props.description));
     conditions.push(a);
   }
   return conditions;
@@ -288,27 +311,27 @@ function parsePrePostCondition<T extends spec.PrePostCondition>(
 function parseBasicFlows(
   path: string[],
   flowPropsArray: Record<string, IFlowProps>,
-  actorDic: spec.Cache<spec.Actor>,
-  glossaries: spec.GlossaryCollection
-): spec.Flow[] {
+  actorDic: Cache<Actor>,
+  glossaries: GlossaryCollection
+): Flow[] {
   if (!flowPropsArray) {
     const errPathText = path.join('/');
-    throw new common.ParseError(`${errPathText} がありません`);
+    throw new ParseError(`${errPathText} がありません`);
   }
-  const flows: spec.Flow[] = [];
+  const flows: Flow[] = [];
   for (const [id, props] of Object.entries(flowPropsArray)) {
     const currPath = path.concat([id]);
-    let player: spec.Actor | spec.Glossary | undefined = actorDic.get(new spec.ActorId(props.playerId));
+    let player: Actor | Glossary | undefined = actorDic.get(new ActorId(props.playerId));
     if (!player) {
-      player = glossaries.get(new spec.GlossaryId(props.playerId));
+      player = glossaries.get(new GlossaryId(props.playerId));
     }
     if (!player) {
       const errPathText = currPath.concat(['playerId']).join('/');
-      throw new common.ParseError(
+      throw new ParseError(
         `${errPathText} の ${props.playerId} は定義されていません。actors に追加するか、glossary に追加してください。`
       );
     }
-    const flow = new spec.Flow(new spec.FlowId(id), new spec.Description(props.description), player);
+    const flow = new Flow(new FlowId(id), new Description(props.description), player);
     flows.push(flow);
   }
   return flows;
@@ -317,111 +340,111 @@ function parseBasicFlows(
 function parseAlternateFlows(
   path: string[],
   flowPropsArray: Record<string, IAlternateFlowProps>,
-  basicFlowDic: spec.Cache<spec.Flow>,
-  actorDic: spec.Cache<spec.Actor>,
-  glossaries: spec.GlossaryCollection
-): spec.AltExFlowCollection<spec.AlternateFlow> {
-  const flows: spec.AlternateFlow[] = [];
+  basicFlowDic: Cache<Flow>,
+  actorDic: Cache<Actor>,
+  glossaries: GlossaryCollection
+): AltExFlowCollection<AlternateFlow> {
+  const flows: AlternateFlow[] = [];
   if (flowPropsArray) {
     for (const [id, props] of Object.entries(flowPropsArray)) {
       const currPath = path.concat([id]);
-      const sourceFlows: spec.Flow[] = [];
+      const sourceFlows: Flow[] = [];
       for (const sourceFlowId of props.sourceFlowIds) {
-        const flow = basicFlowDic.get(new spec.FlowId(sourceFlowId));
+        const flow = basicFlowDic.get(new FlowId(sourceFlowId));
         if (!flow) {
           const errPathText = currPath.concat(['sourceFlowIds']).join('/');
-          throw new common.ParseError(`${errPathText} の ${sourceFlowId} は未定義です。`);
+          throw new ParseError(`${errPathText} の ${sourceFlowId} は未定義です。`);
         }
         sourceFlows.push(flow);
       }
       const nextFlows = parseBasicFlows(path.concat(['nextFlows']), props.nextFlows, actorDic, glossaries);
-      const returnFlow = basicFlowDic.get(new spec.FlowId(props.returnFlowId));
+      const returnFlow = basicFlowDic.get(new FlowId(props.returnFlowId));
       if (!returnFlow) {
         const errPathText = currPath.concat(['returnFlow']).join('/');
-        throw new common.ParseError(`${errPathText} の ${props.returnFlowId} は未定義です。`);
+        throw new ParseError(`${errPathText} の ${props.returnFlowId} は未定義です。`);
       }
-      const flow = new spec.AlternateFlow(
-        new spec.AlternateFlowId(id),
-        new spec.Description(props.description),
+      const flow = new AlternateFlow(
+        new AlternateFlowId(id),
+        new Description(props.description),
         sourceFlows,
-        new spec.FlowCollection(nextFlows),
+        new FlowCollection(nextFlows),
         returnFlow
       );
       flows.push(flow);
     }
   }
-  return new spec.AltExFlowCollection<spec.AlternateFlow>(flows);
+  return new AltExFlowCollection<AlternateFlow>(flows);
 }
 
 function parseExceptionFlows(
   path: string[],
   flowPropsArray: Record<string, IExceptionFlowProps>,
-  basicFlowDic: spec.Cache<spec.Flow>,
-  actorDic: spec.Cache<spec.Actor>,
-  glossaries: spec.GlossaryCollection
-): spec.AltExFlowCollection<spec.ExceptionFlow> {
-  const flows: spec.ExceptionFlow[] = [];
+  basicFlowDic: Cache<Flow>,
+  actorDic: Cache<Actor>,
+  glossaries: GlossaryCollection
+): AltExFlowCollection<ExceptionFlow> {
+  const flows: ExceptionFlow[] = [];
   if (flowPropsArray) {
     for (const [id, props] of Object.entries(flowPropsArray)) {
       const currPath = path.concat([id]);
-      const sourceFlows: spec.Flow[] = [];
+      const sourceFlows: Flow[] = [];
       for (const sourceFlowId of props.sourceFlowIds) {
-        const flow = basicFlowDic.get(new spec.FlowId(sourceFlowId));
+        const flow = basicFlowDic.get(new FlowId(sourceFlowId));
         if (!flow) {
           const errPathText = currPath.concat(['sourceFlowIds']).join('/');
-          throw new common.ParseError(`${errPathText} の ${sourceFlowId} は未定義です。`);
+          throw new ParseError(`${errPathText} の ${sourceFlowId} は未定義です。`);
         }
         sourceFlows.push(flow);
       }
       const nextFlows = parseBasicFlows(currPath.concat(['nextFlows']), props.nextFlows, actorDic, glossaries);
-      const flow = new spec.ExceptionFlow(
-        new spec.ExceptionFlowId(id),
-        new spec.Description(props.description),
+      const flow = new ExceptionFlow(
+        new ExceptionFlowId(id),
+        new Description(props.description),
         sourceFlows,
-        new spec.FlowCollection(nextFlows)
+        new FlowCollection(nextFlows)
       );
       flows.push(flow);
     }
   }
-  return new spec.AltExFlowCollection<spec.ExceptionFlow>(flows);
+  return new AltExFlowCollection<ExceptionFlow>(flows);
 }
 
 function parseValiations(
   path: string[],
   valiationPropsArray: Record<string, IValiationProps>,
-  preConditionDic: spec.Cache<spec.PreCondition>,
-  basicFlowDic: spec.Cache<spec.Flow>,
-  alternateFlows: spec.AltExFlowCollection<spec.AlternateFlow>,
-  exceptionFlows: spec.AltExFlowCollection<spec.ExceptionFlow>,
-  factorDic: spec.Cache<spec.Factor>
-): spec.Valiation[] {
-  const valiations: spec.Valiation[] = [];
+  preConditionDic: Cache<PreCondition>,
+  basicFlowDic: Cache<Flow>,
+  alternateFlows: AltExFlowCollection<AlternateFlow>,
+  exceptionFlows: AltExFlowCollection<ExceptionFlow>,
+  factorDic: Cache<Factor>
+): Valiation[] {
+  const valiations: Valiation[] = [];
   if (valiationPropsArray) {
     for (const [id, props] of Object.entries(valiationPropsArray)) {
       const currPath = path.concat([id]);
-      const sourceFlows: spec.Flow[] = [];
-      const sourcePreConds: spec.PreCondition[] = [];
+      const sourceFlows: Flow[] = [];
+      const sourcePreConds: PreCondition[] = [];
       for (const id of props.inputPointIds) {
-        const cond = preConditionDic.get(new spec.PrePostConditionId(id));
+        const cond = preConditionDic.get(new PrePostConditionId(id));
         if (cond) {
           sourcePreConds.push(cond);
         }
-        const flow = basicFlowDic.get(new spec.FlowId(id));
+        const flow = basicFlowDic.get(new FlowId(id));
         if (flow) {
           sourceFlows.push(flow);
         }
       }
       if (sourcePreConds.length == 0 && sourceFlows.length == 0) {
         const errPathText = currPath.concat(['inputPointIds']).join('/');
-        throw new common.ParseError(`${errPathText} の ${id} は preConditions および basicFlows に未定義です。`);
+        throw new ParseError(`${errPathText} の ${id} は preConditions および basicFlows に未定義です。`);
       }
       const factors = [];
-      const factorInValiation = new spec.Cache<spec.Factor>();
+      const factorInValiation = new Cache<Factor>();
       for (const factorId of props.factorIds) {
-        const factor = factorDic.get(new spec.FactorId(factorId));
+        const factor = factorDic.get(new FactorId(factorId));
         if (!factor) {
           const errPathText = currPath.concat(['factorIds']).join('/');
-          throw new common.ParseError(`${errPathText} の ${factorId} は未定義です。`);
+          throw new ParseError(`${errPathText} の ${factorId} は未定義です。`);
         }
         factors.push(factor);
         factorInValiation.add(factor);
@@ -439,12 +462,12 @@ function parseValiations(
         );
         results.push(vr);
       }
-      const pictCombi = spec.PictCombiFactory.getInstance(factors);
-      const valiation = new spec.Valiation(
-        new spec.ValiationId(id),
+      const pictCombi = PictCombiFactory.getInstance(factors);
+      const valiation = new Valiation(
+        new ValiationId(id),
         sourceFlows,
         factors,
-        new spec.PictConstraint(props.pictConstraint),
+        new PictConstraint(props.pictConstraint),
         pictCombi,
         results
       );
@@ -458,11 +481,11 @@ function parseValiationResult(
   path: string[],
   resultId: string,
   resultProps: IValiationResultProps,
-  basicFlowDic: spec.Cache<spec.Flow>,
-  alternateFlows: spec.AltExFlowCollection<spec.AlternateFlow>,
-  exceptionFlows: spec.AltExFlowCollection<spec.ExceptionFlow>,
-  factorInValiation: spec.Cache<spec.Factor>
-): spec.ValiationResult {
+  basicFlowDic: Cache<Flow>,
+  alternateFlows: AltExFlowCollection<AlternateFlow>,
+  exceptionFlows: AltExFlowCollection<ExceptionFlow>,
+  factorInValiation: Cache<Factor>
+): ValiationResult {
   const patterns = [];
   if (resultProps.patterns) {
     for (const [factorId, factorItems] of Object.entries(resultProps.patterns)) {
@@ -470,7 +493,7 @@ function parseValiationResult(
       const patternsPaths = path.concat(['results', resultId, 'patterns']);
       if (!factor) {
         const errPathText = patternsPaths.join('/');
-        throw new common.ParseError(`${errPathText} の ${factorId} は factorIds の中で未定義です。`);
+        throw new ParseError(`${errPathText} の ${factorId} は factorIds の中で未定義です。`);
       }
       const items = [];
       for (const item of factorItems) {
@@ -483,15 +506,15 @@ function parseValiationResult(
         }
         if (!found) {
           const errPathText = patternsPaths.concat([factorId]).join('/');
-          throw new common.ParseError(`${errPathText} の ${item} は factors/${factorId}/items の中で未定義です。`);
+          throw new ParseError(`${errPathText} の ${item} は factors/${factorId}/items の中で未定義です。`);
         }
-        items.push(new spec.FactorItem(item));
+        items.push(new FactorItem(item));
       }
-      const pattern = new spec.FactorPattern(factor, items);
+      const pattern = new FactorPattern(factor, items);
       patterns.push(pattern);
     }
   }
-  let moveFlow: spec.Flow | spec.AbstractAltExFlow | undefined = basicFlowDic.get(resultProps.moveFlowId);
+  let moveFlow: Flow | AbstractAltExFlow | undefined = basicFlowDic.get(resultProps.moveFlowId);
   if (!moveFlow) {
     moveFlow = alternateFlows.get(resultProps.moveFlowId);
   }
@@ -500,48 +523,38 @@ function parseValiationResult(
   }
   if (!moveFlow) {
     const errPathText = path.concat(['results', resultId, 'moveFlowId']).join('/');
-    throw new common.ParseError(`${errPathText} の ${resultProps.moveFlowId} は未定義です。`);
+    throw new ParseError(`${errPathText} の ${resultProps.moveFlowId} は未定義です。`);
   }
-  return new spec.ValiationResult(
-    new spec.ValiationResultId(resultId),
-    resultProps.resultType as spec.ResultType,
-    patterns,
-    moveFlow
-  );
+  return new ValiationResult(new ValiationResultId(resultId), resultProps.resultType as ResultType, patterns, moveFlow);
 }
 
-function parseScenarios(data: IAppProps, usecasesDic: spec.Cache<spec.UseCase>): spec.Scenario[] {
-  const sescenarios: spec.Scenario[] = [];
+function parseScenarios(data: IAppProps, usecasesDic: Cache<UseCase>): Scenario[] {
+  const sescenarios: Scenario[] = [];
   const path = ['scenarios'];
   if (data.scenarios) {
     for (const [id, scenario] of Object.entries(data.scenarios)) {
       const currPath = path.concat([id]);
-      const usecases: spec.UseCase[] = [];
+      const usecases: UseCase[] = [];
       for (const usecaseId of scenario.usecaseOrder) {
-        const u = usecasesDic.get(new spec.UseCaseId(usecaseId));
+        const u = usecasesDic.get(new UseCaseId(usecaseId));
         if (!u) {
           const errPathText = currPath.concat(['usecaseOrder']).join('/');
-          throw new common.ParseError(`${errPathText} の ${usecaseId} は usecases の中に見つかりません`);
+          throw new ParseError(`${errPathText} の ${usecaseId} は usecases の中に見つかりません`);
         }
         usecases.push(u);
       }
-      const o = new spec.Scenario(
-        new spec.ScenarioId(id),
-        new spec.Name(scenario.name),
-        new spec.Summary(scenario.summary),
-        usecases
-      );
+      const o = new Scenario(new ScenarioId(id), new Name(scenario.name), new Summary(scenario.summary), usecases);
       sescenarios.push(o);
     }
   }
   return sescenarios;
 }
 
-function replaceKeyword(data: IAppProps, app: spec.App): Map<string, Set<spec.Glossary>> {
-  const ucGlossaries = new Map<string, Set<spec.Glossary>>();
+function replaceKeyword(data: IAppProps, app: App): Map<string, Set<Glossary>> {
+  const ucGlossaries = new Map<string, Set<Glossary>>();
   // ${xxx/yyy} を探して置換する
   const regexp = /\$\{([^${}]+)\}/;
-  spec.walkProps(
+  walkProps(
     <Record<string, unknown>>(data as unknown),
     [],
     function (obj: Record<string, unknown>, path: string[], name: string, val: unknown): void {
@@ -559,20 +572,17 @@ function replaceKeyword(data: IAppProps, app: spec.App): Map<string, Set<spec.Gl
         let category = undefined;
         let term = matches[1];
         if (matches['index'] == undefined) {
-          throw new common.ParseError("matches['index'] がない状態は、regexp が変更された状態が考えられます");
+          throw new ParseError("matches['index'] がない状態は、regexp が変更された状態が考えられます");
         }
         const pos = term.indexOf('/');
         if (pos >= 0) {
           category = term.substring(0, pos);
           term = term.substring(pos + 1);
         }
-        const glossary = app.getGlossary(
-          new spec.GlossaryId(term),
-          category ? new spec.GlossaryCategory(category) : undefined
-        );
+        const glossary = app.getGlossary(new GlossaryId(term), category ? new GlossaryCategory(category) : undefined);
         if (!glossary) {
           const errPathText = path.concat([name]).join('/');
-          throw new common.ParseError(`${errPathText} の ${keyword} は、glossaries に未定義です`);
+          throw new ParseError(`${errPathText} の ${keyword} は、glossaries に未定義です`);
         }
         appendUcGlossary(ucGlossaries, glossary, app, path, name);
         const index: number = matches['index'];
@@ -582,9 +592,9 @@ function replaceKeyword(data: IAppProps, app: spec.App): Map<string, Set<spec.Gl
         text = `${prefix}${replacement}${sufix}`;
       } while (matches);
       if (name == 'playerId') {
-        const actor = app.getActor(new spec.ActorId(val));
+        const actor = app.getActor(new ActorId(val));
         if (!actor) {
-          const glossary = app.getGlossary(new spec.GlossaryId(val));
+          const glossary = app.getGlossary(new GlossaryId(val));
           if (glossary) {
             appendUcGlossary(ucGlossaries, glossary, app, path, name);
           }
@@ -597,23 +607,23 @@ function replaceKeyword(data: IAppProps, app: spec.App): Map<string, Set<spec.Gl
 }
 
 function appendUcGlossary(
-  ucGlossaries: Map<string, Set<spec.Glossary>>,
-  glossary: spec.Glossary,
-  app: spec.App,
+  ucGlossaries: Map<string, Set<Glossary>>,
+  glossary: Glossary,
+  app: App,
   path: string[],
   name: string
 ) {
   if (path[0] == 'usecases') {
     const ucId = path[1];
-    const uc = app.getUseCase(new spec.UseCaseId(ucId));
+    const uc = app.getUseCase(new UseCaseId(ucId));
     if (!uc) {
       const errPathText = path.concat([name]).join('/');
       //  path の使われ方が変わったりするとエラーになる
-      throw new common.ParseError(`${errPathText} ユースケースが見つからない`);
+      throw new ParseError(`${errPathText} ユースケースが見つからない`);
     }
     let gset = ucGlossaries.get(ucId);
     if (!gset) {
-      gset = new Set<spec.Glossary>();
+      gset = new Set<Glossary>();
       ucGlossaries.set(ucId, gset);
     }
     gset.add(glossary);

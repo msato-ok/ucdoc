@@ -1,9 +1,11 @@
-import * as spec from '../spec';
-import * as base from './base';
+import { App } from '../spec/app';
+import { SpecCommand } from './base';
 import * as util from '../util';
 import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
+import { UseCase } from '../spec/usecase';
+import { Flow, AlternateFlow, AbstractAltExFlow } from '../spec/flow';
 
 // html のタグの属性名が小文字になっていることから、ブラウザは、タグの属性を小文字しか認識しない
 // https://github.com/vuejs/vue/issues/9528#issuecomment-718400487
@@ -30,7 +32,7 @@ interface IScenarioItem {
 
 class ScenarioSection {
   private _items: IScenarioItem[] = [];
-  private _branchFlowScenarioRelation = new Map<spec.AbstractAltExFlow, IScenarioItem>();
+  private _branchFlowScenarioRelation = new Map<AbstractAltExFlow, IScenarioItem>();
 
   constructor(readonly baseItem: IScenarioItem) {
     this._items.push(baseItem);
@@ -40,18 +42,18 @@ class ScenarioSection {
     return this._items;
   }
 
-  addBranchItem(flow: spec.AbstractAltExFlow, item: IScenarioItem) {
+  addBranchItem(flow: AbstractAltExFlow, item: IScenarioItem) {
     this._items.push(item);
     this._branchFlowScenarioRelation.set(flow, item);
   }
 
-  getByFlow(flow: spec.AbstractAltExFlow): IScenarioItem | undefined {
+  getByFlow(flow: AbstractAltExFlow): IScenarioItem | undefined {
     return this._branchFlowScenarioRelation.get(flow);
   }
 }
 
 class ScenarioSectionFactory {
-  static getInstance(uc: spec.UseCase): ScenarioSection {
+  static getInstance(uc: UseCase): ScenarioSection {
     const scenarioIdPrefix = 'TP';
     const scenarioSection = new ScenarioSection({
       scenario_id: `${scenarioIdPrefix}01`,
@@ -105,7 +107,7 @@ class SimpleItemSection<T> {
 }
 
 class PlayerSectionFactory {
-  static getInstance(uc: spec.UseCase): SimpleItemSection<IPlayerItem> {
+  static getInstance(uc: UseCase): SimpleItemSection<IPlayerItem> {
     const section = new SimpleItemSection<IPlayerItem>();
     for (const player of uc.players) {
       section.add({
@@ -123,7 +125,7 @@ interface IPreConditionItem {
 }
 
 class PreConditionSectionFactory {
-  static getInstance(uc: spec.UseCase): SimpleItemSection<IPreConditionItem> {
+  static getInstance(uc: UseCase): SimpleItemSection<IPreConditionItem> {
     const section = new SimpleItemSection<IPreConditionItem>();
     for (const cond of uc.preConditions) {
       section.add({
@@ -141,7 +143,7 @@ interface IPostConditionItem {
 }
 
 class PostConditionSectionFactory {
-  static getInstance(uc: spec.UseCase): SimpleItemSection<IPostConditionItem> {
+  static getInstance(uc: UseCase): SimpleItemSection<IPostConditionItem> {
     const section = new SimpleItemSection<IPostConditionItem>();
     for (const cond of uc.postConditions) {
       section.add({
@@ -160,7 +162,7 @@ type BranchType = 'none' | 'basic' | 'alt' | 'ex';
 
 interface IScenarioFlow {
   branchType: BranchType;
-  flow: spec.Flow;
+  flow: Flow;
   scenarios: Map<IScenarioItem, string>;
   tooltips: string;
 }
@@ -192,7 +194,7 @@ class ScenarioFlowSection {
 }
 
 class ScenarioFlowSectionFactory {
-  static getInstance(uc: spec.UseCase, scenarioSection: ScenarioSection): ScenarioFlowSection {
+  static getInstance(uc: UseCase, scenarioSection: ScenarioSection): ScenarioFlowSection {
     const scenarioFlowSection = new ScenarioFlowSection();
     const onMark = '○';
     // scenarioRetartPos の使い方
@@ -217,7 +219,7 @@ class ScenarioFlowSectionFactory {
     // 配列の中にシナリオIDがある場合は ○ になる。
     // 配列の初期状態では、基本フロー（bFlow）が、全シナリオで実行される（○になる）状態にして、
     // 分岐する代替・例外フローを走査して、代替・例外フローに対応したシナリオを配列から削除する
-    const scenarioRestartPos = new Map<IScenarioItem, spec.Flow>();
+    const scenarioRestartPos = new Map<IScenarioItem, Flow>();
     for (const bFlow of uc.basicFlows.flows) {
       const scenarioFlow = this.appendBaseFlow(scenarioFlowSection, bFlow, scenarioSection);
       const markingScenarios = Array.from(scenarioFlow.scenarios.keys());
@@ -227,8 +229,8 @@ class ScenarioFlowSectionFactory {
         if (!scenario) {
           throw new Error('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
         }
-        if (refFlow instanceof spec.AlternateFlow) {
-          const altFlow: spec.AlternateFlow = refFlow;
+        if (refFlow instanceof AlternateFlow) {
+          const altFlow: AlternateFlow = refFlow;
           scenarioRestartPos.set(scenario, altFlow.returnFlow);
         } else {
           scenarioRestartPos.set(scenario, bFlow);
@@ -274,7 +276,7 @@ class ScenarioFlowSectionFactory {
 
   private static appendBaseFlow(
     scenarioFlowSection: ScenarioFlowSection,
-    bFlow: spec.Flow,
+    bFlow: Flow,
     scenarioSection: ScenarioSection
   ): IScenarioFlow {
     const branchType = bFlow.refFlows.length > 0 ? 'basic' : 'none';
@@ -293,7 +295,7 @@ class ScenarioFlowSectionFactory {
 
   private static appendRefFlow(
     scenarioFlowSection: ScenarioFlowSection,
-    refFlow: spec.AbstractAltExFlow,
+    refFlow: AbstractAltExFlow,
     scenarioSection: ScenarioSection
   ): IScenarioFlow[] {
     const scenario = scenarioSection.getByFlow(refFlow);
@@ -301,7 +303,7 @@ class ScenarioFlowSectionFactory {
       throw new Error('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
     }
     const items: IScenarioFlow[] = [];
-    const branchType = refFlow instanceof spec.AlternateFlow ? 'alt' : 'ex';
+    const branchType = refFlow instanceof AlternateFlow ? 'alt' : 'ex';
     for (const nFlow of refFlow.nextFlows.flows) {
       const scenarioFlow: IScenarioFlow = {
         branchType: branchType,
@@ -316,17 +318,17 @@ class ScenarioFlowSectionFactory {
   }
 }
 
-export class UsecaseTestCommand implements base.SpecCommand {
+export class UsecaseTestCommand implements SpecCommand {
   constructor(private output: string) {}
 
-  public execute(app: spec.App): void {
+  public execute(app: App): void {
     app.usecases.forEach(uc => {
       const data = this.assembleData(uc);
       this.write(uc.id.toString, data);
     });
   }
 
-  private assembleData(uc: spec.UseCase): string {
+  private assembleData(uc: UseCase): string {
     const scenarioSection = ScenarioSectionFactory.getInstance(uc);
     const playerSection = PlayerSectionFactory.getInstance(uc);
     const preConditionSection = PreConditionSectionFactory.getInstance(uc);
