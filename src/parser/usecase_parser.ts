@@ -23,10 +23,14 @@ export function parseUsecase(
   const usecases: UseCase[] = [];
   for (const [id, props] of Object.entries(data.usecases)) {
     ctx.push([id]);
+    ctx.push(['preConditions']);
     const preConditions: PreCondition[] = parsePrePostCondition(PreCondition, ctx, props.preConditions);
     const preConditionDic = new Cache<PreCondition>();
     preConditionDic.addAll(preConditions);
+    ctx.pop();
+    ctx.push(['postConditions']);
     const postConditions: PostCondition[] = parsePrePostCondition(PostCondition, ctx, props.postConditions);
+    ctx.pop();
     ctx.push(['basicFlows']);
     const basicFlows: Flow[] = parseBasicFlows(ctx, props.basicFlows, actorDic, glossaries);
     ctx.pop();
@@ -97,8 +101,22 @@ function parsePrePostCondition<T extends PrePostCondition>(
 ): T[] {
   const conditions: T[] = [];
   for (const [id, props] of Object.entries(conditionsProps)) {
-    const a = new ctor(new PrePostConditionId(id), new Description(props.description));
-    conditions.push(a);
+    let desc: string;
+    if (typeof props === 'string') {
+      desc = props;
+    } else {
+      desc = props.description;
+    }
+    const cond = new ctor(new PrePostConditionId(id), new Description(desc));
+    if (props.details) {
+      ctx.push(['details']);
+      const details = parsePrePostCondition(PreCondition, ctx, props.details);
+      for (const detail of details) {
+        cond.addDetail(detail);
+      }
+      ctx.pop();
+    }
+    conditions.push(cond);
   }
   return conditions;
 }

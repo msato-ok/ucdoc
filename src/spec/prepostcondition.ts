@@ -1,8 +1,17 @@
 import { UniqueId, Entity, Description } from './core';
 
 export class PrePostCondition extends Entity {
+  private _childNodes: PrePostCondition[] = [];
   constructor(readonly id: UniqueId, readonly description: Description) {
     super(id);
+  }
+
+  get details(): PrePostCondition[] {
+    return this._childNodes;
+  }
+
+  addDetail(detail: PrePostCondition) {
+    this._childNodes.push(detail);
   }
 }
 

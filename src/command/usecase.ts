@@ -76,6 +76,9 @@ export class UsecaseCommand implements SpecCommand {
 ## 事後条件
 <%_ uc.postConditions.forEach((condition, id) => { %>
 - <%= condition.id.text %>: <%= condition.description.text -%>
+  <%_ condition.details.forEach((detail, id) => { %>
+    - <%= detail.id.text %>: <%= detail.description.text -%>
+  <% }); %>
 <% }); %>
 
 ## アクター
@@ -129,5 +132,6 @@ export class UsecaseCommand implements SpecCommand {
     const mdtext = ejs.render(template.trimStart(), data, {});
     const mdpath = path.join(this.output, `${uc.id.text}.md`);
     fs.writeFileSync(mdpath, mdtext);
+    console.info(`${mdpath} generated.`);
   }
 }

@@ -58,6 +58,9 @@ export interface IUseCaseProps {
 
 export interface IPrePostConditionProps {
   description: string;
+  details: {
+    [key: string]: IPrePostConditionProps;
+  };
 }
 
 export interface IFlowProps {
