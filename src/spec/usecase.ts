@@ -63,18 +63,19 @@ export class UseCase extends Entity {
   }
 
   private validateUniqueId() {
-    const uniqueIds = new Set<UniqueId>();
+    const uniqueIds = new Set<string>();
     const _props = <Record<string, unknown>>(this as unknown);
     walkProps(_props, [], function (obj: Record<string, unknown>, path: string[], name: string, val: unknown): void {
       if (!(val instanceof UniqueId)) {
         return;
       }
-      if (uniqueIds.has(val)) {
+      if (uniqueIds.has(val.text)) {
         throw new common.ValidationError(
-          `usecase(${_props.id}) で、IDが重複しています。(${val})\n` +
+          `usecase内で、"${val.text}" のIDが重複して使用されています。\n` +
             'preConditions, postConditions, basicFlows, alternateFlows, exceptionFlows, valiations のキーは、usecase 内でユニークになるようにしてください。'
         );
       }
+      uniqueIds.add(val.text);
     });
   }
 
