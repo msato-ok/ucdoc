@@ -1,4 +1,4 @@
-import fs, { chown } from 'fs';
+import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { UniqueId, Entity, Description, Name, HasText, ValueObject } from './core';

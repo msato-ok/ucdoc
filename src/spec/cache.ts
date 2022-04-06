@@ -1,11 +1,11 @@
-import * as core from './core';
+import { HasKey, UniqueId } from './core';
 import * as common from '../common';
 
-export class Cache<T extends core.HasKey> {
+export class Cache<T extends HasKey> {
   private _cache: Map<string, T> = new Map<string, T>();
 
-  get(key: string | core.UniqueId): T | undefined {
-    if (key instanceof core.UniqueId) {
+  get(key: string | UniqueId): T | undefined {
+    if (key instanceof UniqueId) {
       return this._cache.get(key.text);
     }
     return this._cache.get(key);
@@ -29,7 +29,6 @@ export class Cache<T extends core.HasKey> {
   }
 
   values(): T[] {
-    const data = this._cache.values();
     return Array.from(this._cache.values());
   }
 }
