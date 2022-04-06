@@ -66,7 +66,7 @@ class ScenarioSectionFactory {
       const item: IScenarioItem = {
         scenario_id: `${scenarioIdPrefix}${util.zeropad(scenarioCount, 2)}`,
         type: '準正常系',
-        usecase: `代替フロー(${altFlow.id.toString})`,
+        usecase: `代替フロー(${altFlow.id.text})`,
         desc: altFlow.description.text,
       };
       scenarioSection.addBranchItem(altFlow, item);
@@ -76,7 +76,7 @@ class ScenarioSectionFactory {
       const item: IScenarioItem = {
         scenario_id: `${scenarioIdPrefix}${util.zeropad(scenarioCount, 2)}`,
         type: '異常系',
-        usecase: `例外フロー(${exFlow.id.toString})`,
+        usecase: `例外フロー(${exFlow.id.text})`,
         desc: exFlow.description.text,
       };
       scenarioSection.addBranchItem(exFlow, item);
@@ -111,7 +111,7 @@ class PlayerSectionFactory {
     const section = new SimpleItemSection<IPlayerItem>();
     for (const player of uc.players) {
       section.add({
-        player_id: player.id.toString,
+        player_id: player.id.text,
         desc: player.text,
       });
     }
@@ -129,7 +129,7 @@ class PreConditionSectionFactory {
     const section = new SimpleItemSection<IPreConditionItem>();
     for (const cond of uc.preConditions) {
       section.add({
-        pre_condition_id: cond.id.toString,
+        pre_condition_id: cond.id.text,
         desc: cond.description.text,
       });
     }
@@ -147,7 +147,7 @@ class PostConditionSectionFactory {
     const section = new SimpleItemSection<IPostConditionItem>();
     for (const cond of uc.postConditions) {
       section.add({
-        post_condition_id: cond.id.toString,
+        post_condition_id: cond.id.text,
         desc: cond.description.text,
       });
     }
@@ -324,7 +324,7 @@ export class UsecaseTestCommand implements SpecCommand {
   public execute(app: App): void {
     app.usecases.forEach(uc => {
       const data = this.assembleData(uc);
-      this.write(uc.id.toString, data);
+      this.write(uc.id.text, data);
     });
   }
 
@@ -339,11 +339,11 @@ export class UsecaseTestCommand implements SpecCommand {
     const scenarioFlowJsons = [];
     for (const scenarioFlow of scenarioFlowSection.items) {
       const dic: Record<string, string> = {};
-      dic['flow_id'] = scenarioFlow.flow.id.toString;
+      dic['flow_id'] = scenarioFlow.flow.id.text;
       scenarioFlow.scenarios.forEach((mark: string, scenario: IScenarioItem) => {
         dic[scenario.scenario_id] = mark;
       });
-      dic['player_id'] = scenarioFlow.flow.player.id.toString;
+      dic['player_id'] = scenarioFlow.flow.player.id.text;
       dic['desc'] = scenarioFlow.flow.description.text;
       dic['branch_type'] = scenarioFlow.branchType;
       dic['tooltips'] = scenarioFlow.tooltips;

@@ -1,22 +1,45 @@
-import fs from 'fs';
+import fs, { chown } from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import { UniqueId, Entity, Name, HasText, ValueObject } from './core';
+import { UniqueId, Entity, Description, Name, HasText, ValueObject } from './core';
 import { Flow, AlternateFlow, ExceptionFlow } from './flow';
 import conf from '../conf';
+import { ValidationError, InvalidArgumentError } from '../common';
 
 export class ValiationId extends UniqueId {}
 
 export class Valiation extends Entity {
+  private _dt: DecisionTable;
+
   constructor(
     readonly id: ValiationId,
     readonly sourceFlows: Flow[],
     readonly factors: Factor[],
     readonly pictConstraint: PictConstraint,
     readonly pictCombination: Map<Factor, FactorItem[]>,
-    readonly results: ValiationResult[]
+    readonly results: ValiationResult[],
+    strictValidation: boolean
   ) {
     super(id);
+    this._dt = this.createDecisionTable();
+    this.validate(strictValidation);
+  }
+
+  private validate(strictValidation: boolean): void {
+    if (this.results.length == 0) {
+      throw new ValidationError('results は1つ以上必要です');
+    }
+    this._dt.validate();
+    if (this._dt.invalidRules.length > 0) {
+      if (strictValidation) {
+        const errmsg = [
+          `${this._dt.invalidRules.join('\n')}`,
+          '※ ruleNoはデシジョンテーブルのmdを作成して確認してください。',
+          'usage: ucdoc decision <file> [otherFiles...]',
+        ].join('\n');
+        throw new DTValidationError(errmsg);
+      }
+    }
   }
 
   get countOfPictPatterns(): number {
@@ -30,6 +53,10 @@ export class Valiation extends Entity {
   }
 
   get decisionTable(): DecisionTable {
+    return this._dt;
+  }
+
+  private createDecisionTable(): DecisionTable {
     const dTable = new DecisionTable();
     const factors = Array.from(this.pictCombination.keys());
     for (const factor of factors) {
@@ -59,25 +86,35 @@ export class Valiation extends Entity {
         dTable.addCondition(row);
       }
     }
+    for (const result of this.results) {
+      const row = new DTResultRow(result.desc);
+      for (let ruleNo = 0; ruleNo < dTable.counfOfRules; ruleNo++) {
+        const ruleConditions = dTable.getRuleConditions(ruleNo);
+        if (ruleConditions.containsAll(result.choices.items)) {
+          row.add(DTResultRuleChoice.Check);
+        } else {
+          row.add(DTResultRuleChoice.None);
+        }
+      }
+      dTable.addResult(row);
+    }
     return dTable;
+  }
+
+  get invalidRules(): string[] {
+    return this._dt.invalidRules;
   }
 }
 
 export class ValiationResultId extends UniqueId {}
 
-const ResultType = {
-  Match: 'Match',
-  All: 'All',
-  Otherwise: 'Otherwise',
-} as const;
-export type ResultType = typeof ResultType[keyof typeof ResultType];
-
 export class ValiationResult extends Entity {
   constructor(
     readonly id: ValiationResultId,
-    readonly resultType: ResultType,
-    readonly matchPatterns: FactorPattern[],
-    readonly moveFlow: Flow | AlternateFlow | ExceptionFlow
+    readonly desc: Description,
+    readonly choices: FactorItemChoiceCollection,
+    readonly altFlow: AlternateFlow | undefined,
+    readonly exFlow: ExceptionFlow | undefined
   ) {
     super(id);
   }
@@ -88,6 +125,15 @@ export class FactorId extends UniqueId {}
 export class Factor extends Entity {
   constructor(readonly id: FactorId, readonly name: Name, readonly items: FactorItem[]) {
     super(id);
+  }
+
+  existsItem(item: FactorItem): boolean {
+    for (const _item of this.items) {
+      if (_item.equals(item)) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
@@ -103,8 +149,96 @@ export class PictConstraint extends HasText implements ValueObject {
   }
 }
 
-export class FactorPattern implements ValueObject {
-  constructor(readonly factor: Factor, readonly matchItems: FactorItem[]) {}
+export class FactorItemChoice implements ValueObject {
+  constructor(readonly factor: Factor, readonly item: FactorItem) {}
+  equals(o: FactorItemChoice): boolean {
+    if (!o.factor.equals(this.factor)) {
+      return false;
+    }
+    if (!o.item.equals(this.item)) {
+      return false;
+    }
+    return true;
+  }
+}
+
+export class FactorItemChoiceCollection {
+  private _choices: FactorItemChoice[] = [];
+
+  get items(): FactorItemChoice[] {
+    return this._choices;
+  }
+
+  copy(): FactorItemChoiceCollection {
+    const o = new FactorItemChoiceCollection();
+    for (const choice of this._choices) {
+      o.add(choice);
+    }
+    return o;
+  }
+
+  addAll(factor: Factor) {
+    for (const item of factor.items) {
+      const choice = new FactorItemChoice(factor, item);
+      this.add(choice);
+    }
+  }
+
+  add(choice: FactorItemChoice) {
+    if (this.contains(choice)) {
+      return;
+    }
+    this._choices.push(choice);
+  }
+
+  remove(target: FactorItemChoice) {
+    let i = 0;
+    for (const choice of this._choices) {
+      if (choice.equals(target)) {
+        this._choices.splice(i, 1);
+        return;
+      }
+      i++;
+    }
+  }
+
+  contains(target: FactorItemChoice): boolean {
+    for (const choice of this._choices) {
+      if (choice.equals(target)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  containsAll(items: FactorItemChoice[]): boolean {
+    for (const item of items) {
+      if (!this.contains(item)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  arrow(arrowList: FactorItemChoiceCollection) {
+    for (const choice of this._choices) {
+      if (!arrowList.contains(choice)) {
+        this.remove(choice);
+        this.arrow(arrowList);
+        return;
+      }
+    }
+  }
+
+  disarrow(disarrowList: FactorItemChoiceCollection) {
+    for (const choice of this._choices) {
+      if (disarrowList.contains(choice)) {
+        this.remove(choice);
+        this.disarrow(disarrowList);
+        return;
+      }
+    }
+  }
 }
 
 export class PictCombiFactory {
@@ -177,6 +311,8 @@ export class PictCombiFactory {
   }
 }
 
+export class DTValidationError extends ValidationError {}
+
 export const DTConditionRuleChoice = {
   Yes: 'Y',
   No: 'N',
@@ -197,28 +333,108 @@ class DTConditionRow {
     return this._choices;
   }
 
-  add(col: DTConditionChoice) {
-    this._choices.push(col);
+  add(rule: DTConditionChoice) {
+    this._choices.push(rule);
+  }
+}
+
+export const DTResultRuleChoice = {
+  Check: 'X',
+  None: 'None',
+} as const;
+type DTResultRuleChoice = typeof DTResultRuleChoice[keyof typeof DTResultRuleChoice];
+
+class DTResultRow {
+  private _choices: DTResultRuleChoice[] = [];
+
+  constructor(readonly desc: Description) {}
+
+  get counfOfRules(): number {
+    return this._choices.length;
+  }
+
+  get rules(): DTResultRuleChoice[] {
+    return this._choices;
+  }
+
+  add(rule: DTResultRuleChoice) {
+    this._choices.push(rule);
   }
 }
 
 class DecisionTable {
-  private _rows: DTConditionRow[] = [];
+  private _conditionRows: DTConditionRow[] = [];
+  private _resultRows: DTResultRow[] = [];
+  private _invalidRules: string[] = [];
 
   get counfOfRules(): number {
     // ルール数は、どの行を調べても同じなので 0 番目のものを使って調べる
-    return this._rows[0].counfOfRules;
+    return this._conditionRows[0].counfOfRules;
   }
 
   get conditionRows(): DTConditionRow[] {
-    return this._rows;
+    return this._conditionRows;
+  }
+
+  get resultRows(): DTResultRow[] {
+    return this._resultRows;
   }
 
   addCondition(row: DTConditionRow) {
-    this._rows.push(row);
+    this._conditionRows.push(row);
   }
 
-  addResult(row: DTConditionRow) {
-    this._rows.push(row);
+  addResult(row: DTResultRow) {
+    this._resultRows.push(row);
+  }
+
+  getRuleConditions(ruleNo: number): FactorItemChoiceCollection {
+    if (this.counfOfRules <= ruleNo) {
+      throw new InvalidArgumentError('ruleNo は 0 から (counfOfRules - 1) の範囲で指定してください');
+    }
+    const vertMix = new FactorItemChoiceCollection();
+    for (const conditionRow of this._conditionRows) {
+      const yn = conditionRow.rules[ruleNo];
+      if (yn == DTConditionRuleChoice.Yes) {
+        vertMix.add(new FactorItemChoice(conditionRow.factor, conditionRow.item));
+      } else if (yn == DTConditionRuleChoice.None) {
+        // skip
+      } else {
+        throw new Error('not implement');
+      }
+    }
+    return vertMix;
+  }
+
+  getRuleResults(ruleNo: number): DTResultRow[] {
+    if (this.counfOfRules <= ruleNo) {
+      throw new InvalidArgumentError('ruleNo は 0 から (counfOfRules - 1) の範囲で指定してください');
+    }
+    const vertMix: DTResultRow[] = [];
+    for (const resultRow of this._resultRows) {
+      const yn = resultRow.rules[ruleNo];
+      if (yn == DTResultRuleChoice.Check) {
+        vertMix.push(resultRow);
+      } else if (yn == DTResultRuleChoice.None) {
+        // skip
+      } else {
+        throw new Error('not implement');
+      }
+    }
+    return vertMix;
+  }
+
+  get invalidRules(): string[] {
+    return this._invalidRules;
+  }
+
+  validate(): void {
+    this._invalidRules = [];
+    for (let ruleNo = 0; ruleNo < this.counfOfRules; ruleNo++) {
+      const ruleRows = this.getRuleResults(ruleNo);
+      if (ruleRows.length == 0) {
+        this._invalidRules.push(`ruleNo=${ruleNo + 1} の期待値となる結果が1つもありません`);
+      }
+    }
   }
 }

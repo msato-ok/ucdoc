@@ -21,7 +21,7 @@ export class UsecaseCommand implements SpecCommand {
     for (const flow of uc.basicFlows.flows) {
       const line = {
         anchor: false,
-        label: flow.id.toString,
+        label: flow.id.text,
         desc: '',
         ref: '',
       };
@@ -29,21 +29,21 @@ export class UsecaseCommand implements SpecCommand {
         line.anchor = true;
       }
       if (flow.refFlows.length > 0) {
-        line.ref = ` （${flow.refFlows.map(x => '[' + x.id.toString + '][]').join(', ')}）`;
+        line.ref = ` （${flow.refFlows.map(x => '[' + x.id.text + '][]').join(', ')}）`;
       }
-      line.desc = `[${flow.player.text}](#${flow.player.id.toString}) は、${flow.description.text}`;
+      line.desc = `[${flow.player.text}](#${flow.player.id.text}) は、${flow.description.text}`;
       basicFlowLines.push(line);
 
       if (flow.hasBackLink) {
-        backLinks.add(flow.id.toString);
+        backLinks.add(flow.id.text);
       }
       for (const backLinkFlow of flow.refFlows) {
-        backLinks.add(backLinkFlow.id.toString);
+        backLinks.add(backLinkFlow.id.text);
       }
     }
     if (uc.glossaries) {
       for (const g of uc.glossaries?.items) {
-        backLinks.add(g.id.toString);
+        backLinks.add(g.id.text);
       }
     }
     const data = {
@@ -51,7 +51,7 @@ export class UsecaseCommand implements SpecCommand {
       app: app,
       frontMatter: yaml
         .dump({
-          id: uc.id.toString,
+          id: uc.id.text,
           name: uc.name.text,
         })
         .trimEnd(),
@@ -63,24 +63,24 @@ export class UsecaseCommand implements SpecCommand {
 <%= frontMatter %>
 ---
 
-# <%= uc.id.toString %> <%= uc.name.text %>
+# <%= uc.id.text %> <%= uc.name.text %>
 
 ## 概要
 <%= uc.summary.text %>
 
 ## 事前条件
 <%_ uc.preConditions.forEach((condition) => { %>
-- <%= condition.id.toString %>: <%= condition.description.text -%>
+- <%= condition.id.text %>: <%= condition.description.text -%>
 <% }); %>
 
 ## 事後条件
 <%_ uc.postConditions.forEach((condition, id) => { %>
-- <%= condition.id.toString %>: <%= condition.description.text -%>
+- <%= condition.id.text %>: <%= condition.description.text -%>
 <% }); %>
 
 ## アクター
 <%_ uc.actors.forEach((actor) => { %>
-- <a name="<%= actor.id.toString %>"><%= actor.id.toString %></a>: <%= actor.name.text -%>
+- <a name="<%= actor.id.text %>"><%= actor.id.text %></a>: <%= actor.name.text -%>
 <% }); %>
 
 ## 基本フロー
@@ -94,18 +94,18 @@ export class UsecaseCommand implements SpecCommand {
 
 ## 代替フロー
 <%_ uc.alternateFlows.flows.forEach((flow) => { %>
-- <%= flow.id.toString %>: <%= flow.description.text %> （REF: <%= flow.sourceFlows.map(x => "[" + x.id.toString + "][]").join(", ") %>）
+- <%= flow.id.text %>: <%= flow.description.text %> （REF: <%= flow.sourceFlows.map(x => "[" + x.id.text + "][]").join(", ") %>）
     <%_ flow.nextFlows.flows.forEach((nextFlow) => { %>
-    - <%= nextFlow.id.toString %>: [<%= nextFlow.player.text %>](#<%= nextFlow.player.id.toString %>) は、<%= nextFlow.description.text -%>
+    - <%= nextFlow.id.text %>: [<%= nextFlow.player.text %>](#<%= nextFlow.player.id.text %>) は、<%= nextFlow.description.text -%>
     <% }); %>
-    - [<%= flow.returnFlow.id.toString %>][] に戻る
+    - [<%= flow.returnFlow.id.text %>][] に戻る
 <% }); %>
 
 ## 例外フロー
 <%_ uc.exceptionFlows.flows.forEach((flow) => { %>
-- <%= flow.id.toString %>: <%= flow.description.text %> （REF: <%= flow.sourceFlows.map(x => "[" + x.id.toString + "][]").join(", ") %>）
+- <%= flow.id.text %>: <%= flow.description.text %> （REF: <%= flow.sourceFlows.map(x => "[" + x.id.text + "][]").join(", ") %>）
     <%_ flow.nextFlows.flows.forEach((nextFlow) => { %>
-    - <%= nextFlow.id.toString %>: [<%= nextFlow.player.text %>](#<%= nextFlow.player.id.toString %>) は、<%= nextFlow.description.text -%>
+    - <%= nextFlow.id.text %>: [<%= nextFlow.player.text %>](#<%= nextFlow.player.id.text %>) は、<%= nextFlow.description.text -%>
     <% }); %>
     - 終了
 <% }); %>
@@ -115,7 +115,7 @@ export class UsecaseCommand implements SpecCommand {
   <%_ uc.glossaries.categories.forEach((cat) => { %>
 - <%= cat.text %>
     <%_ uc.glossaries.byCategory(cat).forEach((glossary) => { %>
-    - <a name="<%= glossary.id.toString %>"><%= glossary.id.toString %></a>: <%= glossary.text -%>
+    - <a name="<%= glossary.id.text %>"><%= glossary.id.text %></a>: <%= glossary.text -%>
     <% }); %>
   <% }); %>
 <% } %>
@@ -127,7 +127,7 @@ export class UsecaseCommand implements SpecCommand {
 %>
 `;
     const mdtext = ejs.render(template.trimStart(), data, {});
-    const mdpath = path.join(this.output, `${uc.id.toString}.md`);
+    const mdpath = path.join(this.output, `${uc.id.text}.md`);
     fs.writeFileSync(mdpath, mdtext);
   }
 }

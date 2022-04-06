@@ -22,8 +22,8 @@ export class PictCommand implements SpecCommand {
 
   private writePict(valiation: Valiation, uc: UseCase) {
     const lines = [];
-    const th = valiation.factors.map(x => '-'.repeat(x.id.toString.length));
-    const fids = valiation.factors.map(x => x.id.toString);
+    const th = valiation.factors.map(x => '-'.repeat(x.id.text.length));
+    const fids = valiation.factors.map(x => x.id.text);
     lines.push('|' + fids.join('|') + '|');
     lines.push('|' + th.join('|') + '|');
     const itemCount = valiation.countOfPictPatterns;
@@ -38,7 +38,7 @@ export class PictCommand implements SpecCommand {
       }
       lines.push('|' + iids.join('|') + '|');
     }
-    const pictOutPath = path.join(this.output, `${uc.id.toString}-${valiation.id.toString}.pict.md`);
+    const pictOutPath = path.join(this.output, `${uc.id.text}-${valiation.id.text}.pict.md`);
     fs.writeFileSync(pictOutPath, lines.join('\n') + '\n');
   }
 }

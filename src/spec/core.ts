@@ -1,17 +1,18 @@
 export abstract class UniqueId {
-  constructor(readonly id: string) {}
+  constructor(readonly text: string) {}
   equals(id: UniqueId): boolean {
-    return this.id == id.id;
-  }
-  get toString(): string {
-    return this.id;
+    const res = this.text == id.text ? true : false;
+    return res;
   }
 }
 
 export class Entity implements HasKey {
   constructor(readonly id: UniqueId) {}
   get key(): string {
-    return this.id.toString;
+    return this.id.text;
+  }
+  equals(o: Entity): boolean {
+    return o.id.equals(this.id);
   }
 }
 

@@ -6,7 +6,7 @@ export class Cache<T extends core.HasKey> {
 
   get(key: string | core.UniqueId): T | undefined {
     if (key instanceof core.UniqueId) {
-      return this._cache.get(key.id);
+      return this._cache.get(key.text);
     }
     return this._cache.get(key);
   }
@@ -26,5 +26,10 @@ export class Cache<T extends core.HasKey> {
 
   get size(): number {
     return this._cache.size;
+  }
+
+  values(): T[] {
+    const data = this._cache.values();
+    return Array.from(this._cache.values());
   }
 }

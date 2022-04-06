@@ -1,7 +1,7 @@
 import { App } from '../spec/app';
 import { SpecCommand } from './base';
 import { UseCase } from '../spec/usecase';
-import { Valiation, DTConditionRuleChoice } from '../spec/valiation';
+import { Valiation, DTConditionRuleChoice, DTResultRuleChoice } from '../spec/valiation';
 import fs from 'fs';
 import path from 'path';
 
@@ -30,7 +30,7 @@ export class DecisionCommand implements SpecCommand {
     lines.push('|' + head.join('|') + '|');
     lines.push('|-|-|-|' + '-|'.repeat(dTable.counfOfRules));
     let condTitleOut = false;
-    let prevFactorTitle = undefined;
+    let prevFactorTitle = '';
     for (const row of dTable.conditionRows) {
       const cols = [];
       if (!condTitleOut) {
@@ -39,12 +39,12 @@ export class DecisionCommand implements SpecCommand {
       } else {
         cols.push(' ');
       }
-      if (prevFactorTitle != row.factor.id.toString) {
-        cols.push(row.factor.id.toString);
+      if (prevFactorTitle != row.factor.id.text) {
+        cols.push(row.factor.id.text);
       } else {
         cols.push(' ');
       }
-      prevFactorTitle = row.factor.id.toString;
+      prevFactorTitle = row.factor.id.text;
       cols.push(row.item.text);
       for (const rule of row.rules) {
         if (rule == DTConditionRuleChoice.Yes) {
@@ -59,7 +59,29 @@ export class DecisionCommand implements SpecCommand {
       }
       lines.push('|' + cols.join('|') + '|');
     }
-    const outPath = path.join(this.output, `${uc.id.toString}-${valiation.id.toString}.decision.md`);
+    let resTitleOut = false;
+    for (const row of dTable.resultRows) {
+      const cols = [];
+      if (!resTitleOut) {
+        cols.push('結果');
+        resTitleOut = true;
+      } else {
+        cols.push(' ');
+      }
+      cols.push(row.desc.text);
+      cols.push(' ');
+      for (const rule of row.rules) {
+        if (rule == DTResultRuleChoice.Check) {
+          cols.push('X');
+        } else if (rule == DTResultRuleChoice.None) {
+          cols.push(' ');
+        } else {
+          throw new Error(`not implement: ${rule}`);
+        }
+      }
+      lines.push('|' + cols.join('|') + '|');
+    }
+    const outPath = path.join(this.output, `${uc.id.text}-${valiation.id.text}.decision.md`);
     fs.writeFileSync(outPath, lines.join('\n') + '\n');
   }
 }

@@ -21,7 +21,7 @@ export class Glossary extends Entity {
     if (this.name) {
       return this.name.text;
     }
-    return this.id.toString;
+    return this.id.text;
   }
 
   constructor(
@@ -33,7 +33,7 @@ export class Glossary extends Entity {
   ) {
     super(id);
     if (!this.name) {
-      this.name = new Name(id.toString);
+      this.name = new Name(id.text);
     }
     if (!desc) {
       this.desc = new Description(this.name.text);
