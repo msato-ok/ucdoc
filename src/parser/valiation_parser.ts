@@ -1,9 +1,8 @@
 import { ParserContext, IValiationProps, IValiationResultProps } from './parser';
 import { ParseError } from '../common';
 import { Cache } from '../spec/cache';
-import { Factor, FactorId, FactorItem, FactorItemChoice, FactorItemChoiceCollection } from '../spec/valiation';
 import { Description } from '../spec/core';
-import { PreCondition, PrePostConditionId } from '../spec/prepostcondition';
+import { PreCondition, PrePostConditionId, PostCondition } from '../spec/prepostcondition';
 import { Flow, FlowId, AltExFlowCollection, AlternateFlow, ExceptionFlow } from '../spec/flow';
 import {
   Valiation,
@@ -12,16 +11,24 @@ import {
   ValiationResult,
   ValiationResultId,
   PictCombiFactory,
+  Factor,
+  FactorId,
+  FactorItem,
+  FactorItemChoice,
+  FactorItemChoiceCollection,
+  CheckPoint,
 } from '../spec/valiation';
 
 export function parseValiations(
   ctx: ParserContext,
   valiationPropsArray: Record<string, IValiationProps>,
   preConditionDic: Cache<PreCondition>,
+  postConditionDic: Cache<PostCondition>,
   basicFlowDic: Cache<Flow>,
   alternateFlows: AltExFlowCollection<AlternateFlow>,
   exceptionFlows: AltExFlowCollection<ExceptionFlow>,
-  factorDic: Cache<Factor>
+  factorDic: Cache<Factor>,
+  strictValidation: boolean
 ): Valiation[] {
   ctx.push(['valiations']);
   const valiations: Valiation[] = [];
@@ -30,8 +37,8 @@ export function parseValiations(
       ctx.push([id]);
       const sourceFlows: Flow[] = [];
       const sourcePreConds: PreCondition[] = [];
-      ctx.push(['inputPointIds']);
-      for (const id of props.inputPointIds) {
+      ctx.push(['injectIds']);
+      for (const id of props.injectIds) {
         ctx.push([id]);
         const cond = preConditionDic.get(new PrePostConditionId(id));
         const flow = basicFlowDic.get(new FlowId(id));
@@ -45,7 +52,7 @@ export function parseValiations(
         ctx.pop();
       }
       if (sourcePreConds.length == 0 && sourceFlows.length == 0) {
-        throw new ParseError('inputPointIds が未定義です。');
+        throw new ParseError('injectIds が未定義です。');
       }
       ctx.pop();
       const factors = [];
@@ -65,7 +72,15 @@ export function parseValiations(
       const results = [];
       ctx.push(['results']);
       for (const [resultId, resultProps] of Object.entries(props.results)) {
-        const vr = parseValiationResult(ctx, resultId, resultProps, alternateFlows, exceptionFlows, factorInValiation);
+        const vr = parseValiationResult(
+          ctx,
+          resultId,
+          resultProps,
+          postConditionDic,
+          alternateFlows,
+          exceptionFlows,
+          factorInValiation
+        );
         results.push(vr);
       }
       ctx.pop();
@@ -77,9 +92,9 @@ export function parseValiations(
         new PictConstraint(props.pictConstraint),
         pictCombi,
         results,
-        false
+        strictValidation
       );
-      if (valiation.invalidRules.length > 0) {
+      if (!strictValidation && valiation.invalidRules.length > 0) {
         const errmsg = [
           `${valiation.invalidRules.join('\n')}`,
           '※ ruleNoはデシジョンテーブルのmdを作成して確認してください。',
@@ -99,6 +114,7 @@ function parseValiationResult(
   ctx: ParserContext,
   resultId: string,
   resultProps: IValiationResultProps,
+  postConditionDic: Cache<PostCondition>,
   alternateFlows: AltExFlowCollection<AlternateFlow>,
   exceptionFlows: AltExFlowCollection<ExceptionFlow>,
   factorInValiation: Cache<Factor>
@@ -140,30 +156,30 @@ function parseValiationResult(
     choices.arrow(arrows);
     ctx.pop();
   }
-  ctx.push(['altFlowId']);
-  let altFlow: AlternateFlow | undefined = undefined;
-  if (resultProps.altFlowId) {
-    altFlow = alternateFlows.get(resultProps.altFlowId);
-    if (!altFlow) {
-      throw new ParseError(`${resultProps.altFlowId} は alternateFlows に未定義です。`);
-    }
+  ctx.push(['checkIds']);
+  if (!resultProps.checkIds) {
+    throw new ParseError('checkIds の定義は必須です。');
   }
-  ctx.pop();
-  ctx.push(['exFlowId']);
-  let exFlow: ExceptionFlow | undefined = undefined;
-  if (resultProps.exFlowId) {
-    exFlow = exceptionFlows.get(resultProps.exFlowId);
-    if (!exFlow) {
-      throw new ParseError(`${resultProps.exFlowId} は exceptionFlows に未定義です。`);
+  const checkPoints: CheckPoint[] = [];
+  for (const id of resultProps.checkIds) {
+    let checkPoint: CheckPoint | undefined = postConditionDic.get(id);
+    if (!checkPoint) {
+      checkPoint = alternateFlows.get(id);
     }
+    if (!checkPoint) {
+      checkPoint = exceptionFlows.get(id);
+    }
+    if (!checkPoint) {
+      throw new ParseError(`${id} は postConditions, alternateFlows, exceptionFlows に未定義です。`);
+    }
+    checkPoints.push(checkPoint);
   }
   ctx.pop();
   const results = new ValiationResult(
     new ValiationResultId(resultId),
     new Description(resultProps.desc),
     choices,
-    altFlow,
-    exFlow
+    checkPoints
   );
   ctx.pop();
   return results;

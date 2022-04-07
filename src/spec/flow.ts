@@ -1,4 +1,4 @@
-import { UniqueId, Entity, Description } from './core';
+import { UniqueId, Entity, Description, HasTestCover } from './core';
 import { ValidationError } from '../common';
 import { Actor } from './actor';
 import { Cache } from './cache';
@@ -58,7 +58,10 @@ export class FlowCollection {
     }
   }
 }
-export abstract class AbstractAltExFlow extends Entity {
+
+export abstract class AbstractAltExFlow extends Entity implements HasTestCover {
+  private _testCover = false;
+
   constructor(
     readonly id: AlternateFlowId | ExceptionFlowId,
     readonly description: Description,
@@ -66,6 +69,14 @@ export abstract class AbstractAltExFlow extends Entity {
     readonly nextFlows: FlowCollection
   ) {
     super(id);
+  }
+
+  get isTestCover(): boolean {
+    return this._testCover;
+  }
+
+  set testCover(cover: boolean) {
+    this._testCover = cover;
   }
 }
 

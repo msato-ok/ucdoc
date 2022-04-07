@@ -83,7 +83,7 @@ export interface IAlternateFlowProps extends IAltExFlowProps {
 export type IExceptionFlowProps = IAltExFlowProps;
 
 export interface IValiationProps {
-  inputPointIds: string[];
+  injectIds: string[];
   factorIds: string[];
   pictConstraint: string;
   results: {
@@ -107,8 +107,7 @@ export interface IValiationResultProps {
   disarrow?: {
     [key: string]: string[];
   };
-  altFlowId?: string;
-  exFlowId?: string;
+  checkIds?: string;
 }
 
 export interface IScenarioProps {

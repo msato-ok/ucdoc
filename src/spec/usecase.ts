@@ -1,11 +1,13 @@
-import * as common from '../common';
-import { UniqueId, Entity, Name, Summary, walkProps } from './core';
+import { ValidationError } from '../common';
+import { UniqueId, Entity, Name, Summary, implementsHasTestCover } from './core';
 import { Cache } from './cache';
 import { Actor } from './actor';
 import { AltExFlowCollection, AlternateFlow, ExceptionFlow, FlowCollection } from './flow';
-import { PreCondition, PostCondition } from './prepostcondition';
+import { PreCondition, PostCondition, PrePostCondition } from './prepostcondition';
 import { Glossary, GlossaryCollection } from './glossary';
 import { Valiation } from './valiation';
+
+export class UseCaseValidationError extends ValidationError {}
 
 export type Player = Actor | Glossary;
 
@@ -14,6 +16,7 @@ export class UseCaseId extends UniqueId {}
 export class UseCase extends Entity {
   private _preConditions: Cache<PreCondition> = new Cache<PreCondition>();
   private _postConditions: Cache<PostCondition> = new Cache<PostCondition>();
+  private _errorMessages: string[] = [];
 
   get actors(): Actor[] {
     const acts = new Set<Actor>();
@@ -43,6 +46,14 @@ export class UseCase extends Entity {
     return Array.from(players);
   }
 
+  get hasError(): boolean {
+    return this._errorMessages.length > 0;
+  }
+
+  get errors(): string[] {
+    return this._errorMessages;
+  }
+
   constructor(
     readonly id: UseCaseId,
     readonly name: Name,
@@ -53,30 +64,82 @@ export class UseCase extends Entity {
     readonly alternateFlows: AltExFlowCollection<AlternateFlow>,
     readonly exceptionFlows: AltExFlowCollection<ExceptionFlow>,
     readonly valiations: Valiation[],
-    readonly glossaries?: GlossaryCollection
+    readonly glossaries?: GlossaryCollection,
+    strictValidation?: boolean
   ) {
     super(id);
     this._preConditions.addAll(preConditions);
     this._postConditions.addAll(postConditions);
     this.validateUniqueId();
+    if (strictValidation == undefined) {
+      strictValidation = false;
+    }
+    this.validatePostConditionTestCoverage(strictValidation);
     this.updateFlowsRef();
   }
 
+  /**
+   * ユースケース内で ID が重複して使われていないことをチェックする
+   * ユニークじゃないといけない ID は UniqueId を継承していて、プロパティ名が id のすべて。
+   */
   private validateUniqueId() {
     const uniqueIds = new Set<string>();
-    const _props = <Record<string, unknown>>(this as unknown);
-    walkProps(_props, [], function (obj: Record<string, unknown>, path: string[], name: string, val: unknown): void {
-      if (!(val instanceof UniqueId)) {
-        return;
+    function validateEntityId(entities: Entity[]) {
+      for (const entity of entities) {
+        if (uniqueIds.has(entity.id.text)) {
+          throw new ValidationError(
+            [
+              `usecase内で、"${entity.id.text}" のIDが重複して使用されています。`,
+              'preConditions, postConditions, basicFlows, alternateFlows, exceptionFlows, valiations のキーは、usecase 内でユニークになるようにしてください。',
+            ].join('\n')
+          );
+        }
+        uniqueIds.add(entity.id.text);
       }
-      if (uniqueIds.has(val.text)) {
-        throw new common.ValidationError(
-          `usecase内で、"${val.text}" のIDが重複して使用されています。\n` +
-            'preConditions, postConditions, basicFlows, alternateFlows, exceptionFlows, valiations のキーは、usecase 内でユニークになるようにしてください。'
-        );
+    }
+    validateEntityId(PrePostCondition.getNestedObjects(this.preConditions));
+    validateEntityId(PrePostCondition.getNestedObjects(this.postConditions));
+    validateEntityId(this.basicFlows.flows);
+    validateEntityId(this.exceptionFlows.flows);
+    validateEntityId(this.valiations);
+    for (const v of this.valiations) {
+      validateEntityId(v.results);
+    }
+  }
+
+  /**
+   * ユースケーステストのチェックとして、事後条件の確認が網羅されているかチェックする
+   */
+  private validatePostConditionTestCoverage(strictValidation: boolean) {
+    for (const valiation of this.valiations) {
+      for (const result of valiation.results) {
+        for (const checkPoint of result.checkPoints) {
+          if (implementsHasTestCover(checkPoint)) {
+            checkPoint.testCover = true;
+          }
+        }
       }
-      uniqueIds.add(val.text);
-    });
+    }
+    const errMessages = [];
+    for (const o of this.postConditions) {
+      if (!o.isTestCover) {
+        errMessages.push(`valiations の中に事後条件 ${o.id.text} の検証ルールがありません。`);
+      }
+    }
+    for (const o of this.alternateFlows.flows) {
+      if (!o.isTestCover) {
+        errMessages.push(`valiations の中に代替フロー ${o.id.text} の検証ルールがありません。`);
+      }
+    }
+    for (const o of this.exceptionFlows.flows) {
+      if (!o.isTestCover) {
+        errMessages.push(`valiations の中に例外フロー ${o.id.text} の検証ルールがありません。`);
+      }
+    }
+    this._errorMessages = this._errorMessages.concat(errMessages);
+    if (strictValidation && errMessages.length > 0) {
+      throw new UseCaseValidationError(errMessages.join('\n'));
+    }
   }
 
   private updateFlowsRef() {

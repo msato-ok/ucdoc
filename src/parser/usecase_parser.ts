@@ -17,8 +17,13 @@ export function parseUsecase(
   actorDic: Cache<Actor>,
   factorDic: Cache<Factor>,
   glossaries: GlossaryCollection,
-  ucGlossaries?: Map<string, Set<Glossary>>
+  ucGlossaries?: Map<string, Set<Glossary>>,
+  strictValidation?: boolean
 ): UseCase[] {
+  if (strictValidation === undefined) {
+    strictValidation = false;
+  }
+
   ctx.push(['usecases']);
   const usecases: UseCase[] = [];
   for (const [id, props] of Object.entries(data.usecases)) {
@@ -26,10 +31,12 @@ export function parseUsecase(
     ctx.push(['preConditions']);
     const preConditions: PreCondition[] = parsePrePostCondition(PreCondition, ctx, props.preConditions);
     const preConditionDic = new Cache<PreCondition>();
-    preConditionDic.addAll(preConditions);
+    preConditionDic.addAll(PrePostCondition.getNestedObjects(preConditions));
     ctx.pop();
     ctx.push(['postConditions']);
     const postConditions: PostCondition[] = parsePrePostCondition(PostCondition, ctx, props.postConditions);
+    const postConditionDic = new Cache<PostCondition>();
+    postConditionDic.addAll(<PostCondition[]>PrePostCondition.getNestedObjects(postConditions));
     ctx.pop();
     ctx.push(['basicFlows']);
     const basicFlows: Flow[] = parseBasicFlows(ctx, props.basicFlows, actorDic, glossaries);
@@ -63,10 +70,12 @@ export function parseUsecase(
       ctx,
       props.valiations,
       preConditionDic,
+      postConditionDic,
       basicFlowDic,
       alternateFlows,
       exceptionFlows,
-      factorDic
+      factorDic,
+      strictValidation
     );
 
     const usecase = new UseCase(
@@ -79,8 +88,12 @@ export function parseUsecase(
       alternateFlows,
       exceptionFlows,
       valiations,
-      glossariesInUc
+      glossariesInUc,
+      strictValidation
     );
+    if (!strictValidation && usecase.hasError) {
+      console.warn(`WARN: ${ctx.pathText}: ${usecase.errors.join('\n')}`);
+    }
 
     usecases.push(usecase);
     ctx.pop();

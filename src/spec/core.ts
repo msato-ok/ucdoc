@@ -51,6 +51,15 @@ export class Url extends HasText implements ValueObject {
   }
 }
 
+export interface HasTestCover {
+  get isTestCover(): boolean;
+  set testCover(cover: boolean);
+}
+
+export function implementsHasTestCover(arg: any): arg is HasTestCover {
+  return arg !== null && typeof arg === 'object' && typeof arg.isTestCover === 'boolean';
+}
+
 type WalkCallback = (obj: Record<string, unknown>, path: string[], name: string, val: unknown) => void;
 
 export function walkProps(obj: Record<string, unknown>, path: string[], callback: WalkCallback) {

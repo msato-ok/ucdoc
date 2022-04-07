@@ -3,8 +3,9 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { UniqueId, Entity, Description, Name, HasText, ValueObject } from './core';
 import { Flow, AlternateFlow, ExceptionFlow } from './flow';
+import { PostCondition } from './prepostcondition';
 import conf from '../conf';
-import { ValidationError, InvalidArgumentError } from '../common';
+import { ValidationError, InvalidArgumentError, BugError } from '../common';
 
 export class ValiationId extends UniqueId {}
 
@@ -47,7 +48,7 @@ export class Valiation extends Entity {
     // 0 番目のものを使って調べる
     const combi = this.pictCombination.get(this.factors[0]);
     if (!combi) {
-      throw new Error('ここでエラーになるのはバグ');
+      throw new BugError();
     }
     return combi.length;
   }
@@ -62,7 +63,7 @@ export class Valiation extends Entity {
     for (const factor of factors) {
       const choiceItems = this.pictCombination.get(factor);
       if (!choiceItems) {
-        throw new Error('ここでエラーになるのはバグ');
+        throw new BugError();
       }
       const uniqItems = new Set<FactorItem>();
       for (const item of choiceItems) {
@@ -108,13 +109,14 @@ export class Valiation extends Entity {
 
 export class ValiationResultId extends UniqueId {}
 
+export type CheckPoint = PostCondition | AlternateFlow | ExceptionFlow;
+
 export class ValiationResult extends Entity {
   constructor(
     readonly id: ValiationResultId,
     readonly desc: Description,
     readonly choices: FactorItemChoiceCollection,
-    readonly altFlow: AlternateFlow | undefined,
-    readonly exFlow: ExceptionFlow | undefined
+    readonly checkPoints: CheckPoint[]
   ) {
     super(id);
   }

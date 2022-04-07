@@ -1,3 +1,4 @@
+import { BugError } from '../common';
 import { App } from '../spec/app';
 import { SpecCommand } from './base';
 import { UseCase } from '../spec/usecase';
@@ -32,7 +33,7 @@ export class PictCommand implements SpecCommand {
       for (const factor of valiation.factors) {
         const items = valiation.pictCombination.get(factor);
         if (!items) {
-          throw new Error('ここでエラーになるのはバグ');
+          throw new BugError();
         }
         iids.push(items[itemNo].text);
       }

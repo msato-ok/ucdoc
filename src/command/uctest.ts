@@ -1,5 +1,6 @@
 import { App } from '../spec/app';
 import { SpecCommand } from './base';
+import { BugError } from '../common';
 import * as util from '../util';
 import ejs from 'ejs';
 import fs from 'fs';
@@ -227,7 +228,7 @@ class ScenarioFlowSectionFactory {
         const refScenarioFlows = this.appendRefFlow(scenarioFlowSection, refFlow, scenarioSection);
         const scenario = scenarioSection.getByFlow(refFlow);
         if (!scenario) {
-          throw new Error('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
+          throw new BugError('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
         }
         if (refFlow instanceof AlternateFlow) {
           const altFlow: AlternateFlow = refFlow;
@@ -300,7 +301,7 @@ class ScenarioFlowSectionFactory {
   ): IScenarioFlow[] {
     const scenario = scenarioSection.getByFlow(refFlow);
     if (!scenario) {
-      throw new Error('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
+      throw new BugError('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
     }
     const items: IScenarioFlow[] = [];
     const branchType = refFlow instanceof AlternateFlow ? 'alt' : 'ex';
@@ -513,35 +514,6 @@ export class UsecaseTestCommand implements SpecCommand {
               <v-card-subtitle>○のついたフローを縦方向に進めてください</v-card-subtitle>
               <v-card-text>
                 <v-data-table dense :headers="scenario_flow.headers" :items="scenario_flow.items" :disable-sort="true" fixed-header
-                  disable-pagination hide-default-footer>
-                  <template v-slot:item.flow_id="{ item }">
-
-                    <v-tooltip bottom v-if="item.branch_type != 'none'" >
-                      <template v-slot:activator="{ on, attrs }">
-                        <v-icon v-if="item.branch_type == 'basic'" v-bind="attrs" v-on="on">mdi-arrow-right-thick</v-icon>
-                        <v-icon v-if="item.branch_type == 'alt'" v-bind="attrs" v-on="on" color="green darken-2">mdi-arrow-right-thick</v-icon>
-                        <v-icon v-if="item.branch_type == 'ex'" v-bind="attrs" v-on="on" color="orange darken-5">mdi-arrow-right-thick</v-icon>
-                      </template>
-                      <div>{{ item.tooltips }}</div>
-                    </v-tooltip>
-
-                    {{ item.flow_id }}
-                  </template>
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-        <v-row v-for="s_item in scenario.items">
-          <v-col cols="12">
-            <v-card class="test-step">
-              <v-card-title class="text-h6">
-                テスト手順 {{ s_item.scenario_id }}
-              </v-card-title>
-              <v-card-subtitle>フロー: {{ s_item.usecase }}</v-card-subtitle>
-              <v-card-subtitle>{{ s_item.desc }}</v-card-subtitle>
-              <v-card-text>
-                <v-data-table dense :headers="step.headers" :items="step.items" :disable-sort="true" fixed-header
                   disable-pagination hide-default-footer>
                   <template v-slot:item.flow_id="{ item }">
 
