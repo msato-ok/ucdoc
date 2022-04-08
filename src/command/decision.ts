@@ -24,11 +24,11 @@ export class DecisionCommand implements SpecCommand {
     const lines = [];
     const dTable = valiation.decisionTable;
     const head = [' ', ' ', ' '];
-    for (let i = 0; i < dTable.counfOfRules; i++) {
+    for (let i = 0; i < dTable.countOfRules; i++) {
       head.push(`${i + 1}`);
     }
     lines.push('|' + head.join('|') + '|');
-    lines.push('|-|-|-|' + '-|'.repeat(dTable.counfOfRules));
+    lines.push('|-|-|-|' + '-|'.repeat(dTable.countOfRules));
     let condTitleOut = false;
     let prevFactorTitle = '';
     for (const row of dTable.conditionRows) {

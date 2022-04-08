@@ -8,6 +8,8 @@ import path from 'path';
 import { UseCase } from '../spec/usecase';
 import { Flow, AlternateFlow, AbstractAltExFlow } from '../spec/flow';
 
+// ■ html属性に関する注意
+//
 // html のタグの属性名が小文字になっていることから、ブラウザは、タグの属性を小文字しか認識しない
 // https://github.com/vuejs/vue/issues/9528#issuecomment-718400487
 // そのため vue.js のカスマムタグも、キャメルケースじゃなくて、すべて小文字にする必要がある。
@@ -228,7 +230,7 @@ class ScenarioFlowSectionFactory {
         const refScenarioFlows = this.appendRefFlow(scenarioFlowSection, refFlow, scenarioSection);
         const scenario = scenarioSection.getByFlow(refFlow);
         if (!scenario) {
-          throw new BugError('scenario が altexScenarioMap の中にない状態は、ありえないのでバグ');
+          throw new BugError('scenario が scenarioSection の中にない状態は、ありえないのでバグ');
         }
         if (refFlow instanceof AlternateFlow) {
           const altFlow: AlternateFlow = refFlow;

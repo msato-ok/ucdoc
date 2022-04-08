@@ -89,7 +89,7 @@ export class Valiation extends Entity {
     }
     for (const result of this.results) {
       const row = new DTResultRow(result.desc);
-      for (let ruleNo = 0; ruleNo < dTable.counfOfRules; ruleNo++) {
+      for (let ruleNo = 0; ruleNo < dTable.countOfRules; ruleNo++) {
         const ruleConditions = dTable.getRuleConditions(ruleNo);
         if (ruleConditions.containsAll(result.choices.items)) {
           row.add(DTResultRuleChoice.Check);
@@ -327,7 +327,7 @@ class DTConditionRow {
 
   constructor(readonly factor: Factor, readonly item: FactorItem) {}
 
-  get counfOfRules(): number {
+  get countOfRules(): number {
     return this._choices.length;
   }
 
@@ -351,7 +351,7 @@ class DTResultRow {
 
   constructor(readonly desc: Description) {}
 
-  get counfOfRules(): number {
+  get countOfRules(): number {
     return this._choices.length;
   }
 
@@ -364,14 +364,14 @@ class DTResultRow {
   }
 }
 
-class DecisionTable {
+export class DecisionTable {
   private _conditionRows: DTConditionRow[] = [];
   private _resultRows: DTResultRow[] = [];
   private _invalidRules: string[] = [];
 
-  get counfOfRules(): number {
+  get countOfRules(): number {
     // ルール数は、どの行を調べても同じなので 0 番目のものを使って調べる
-    return this._conditionRows[0].counfOfRules;
+    return this._conditionRows[0].countOfRules;
   }
 
   get conditionRows(): DTConditionRow[] {
@@ -391,8 +391,8 @@ class DecisionTable {
   }
 
   getRuleConditions(ruleNo: number): FactorItemChoiceCollection {
-    if (this.counfOfRules <= ruleNo) {
-      throw new InvalidArgumentError('ruleNo は 0 から (counfOfRules - 1) の範囲で指定してください');
+    if (this.countOfRules <= ruleNo) {
+      throw new InvalidArgumentError('ruleNo は 0 から (countOfRules - 1) の範囲で指定してください');
     }
     const vertMix = new FactorItemChoiceCollection();
     for (const conditionRow of this._conditionRows) {
@@ -409,8 +409,8 @@ class DecisionTable {
   }
 
   getRuleResults(ruleNo: number): DTResultRow[] {
-    if (this.counfOfRules <= ruleNo) {
-      throw new InvalidArgumentError('ruleNo は 0 から (counfOfRules - 1) の範囲で指定してください');
+    if (this.countOfRules <= ruleNo) {
+      throw new InvalidArgumentError('ruleNo は 0 から (countOfRules - 1) の範囲で指定してください');
     }
     const vertMix: DTResultRow[] = [];
     for (const resultRow of this._resultRows) {
@@ -432,7 +432,7 @@ class DecisionTable {
 
   validate(): void {
     this._invalidRules = [];
-    for (let ruleNo = 0; ruleNo < this.counfOfRules; ruleNo++) {
+    for (let ruleNo = 0; ruleNo < this.countOfRules; ruleNo++) {
       const ruleRows = this.getRuleResults(ruleNo);
       if (ruleRows.length == 0) {
         this._invalidRules.push(`ruleNo=${ruleNo + 1} の期待値となる結果が1つもありません`);

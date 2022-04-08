@@ -3,7 +3,7 @@ import { SpecCommand } from './command/base';
 import { UsecaseCommand } from './command/usecase';
 import { UsecaseTestCommand } from './command/uctest';
 import { PictCommand } from './command/pict';
-import { DecisionCommand } from './command/decision';
+import { DecisionHtmlCommand } from './command/decision_html';
 import { parse } from './parser/parser';
 
 const packageJson = require('../package.json');
@@ -49,7 +49,7 @@ program
   .requiredOption('-o, --output <directory>', 'output directory')
   .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
     const output = options['output'];
-    const command = new DecisionCommand(output);
+    const command = new DecisionHtmlCommand(output);
     executeCommand(file, otherFiles, command);
   });
 

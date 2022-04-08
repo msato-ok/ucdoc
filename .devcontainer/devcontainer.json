@@ -23,8 +23,8 @@
     "ms-vscode.vscode-typescript",
     // markdown all in one
     "yzhang.markdown-all-in-one",
-    // html preview
-    "tht13.html-preview-vscode",
+    // live preview (HTML preview)
+    "ms-vscode.live-server",
   ],
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   // "forwardPorts": [],
