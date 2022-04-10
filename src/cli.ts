@@ -64,6 +64,10 @@ function executeCommand(file: string, otherFiles: string[], specCmd: SpecCommand
     const s = parse(files);
     specCmd.execute(s);
   } catch (e) {
-    console.error(e);
+    if (e instanceof Error) {
+      console.error(e.stack);
+    } else {
+      console.error(e);
+    }
   }
 }

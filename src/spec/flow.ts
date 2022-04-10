@@ -48,9 +48,9 @@ export class FlowCollection {
     return Array.from(this._players);
   }
 
-  constructor(readonly flows: Flow[]) {
-    this._flows.addAll(flows);
-    for (const flow of flows) {
+  constructor(readonly items: Flow[]) {
+    this._flows.addAll(items);
+    for (const flow of items) {
       if (flow.player instanceof Actor) {
         this._actors.add(flow.player);
       }
@@ -120,9 +120,9 @@ export class AltExFlowCollection<T extends AbstractAltExFlow> {
     return Array.from(this._players);
   }
 
-  constructor(readonly flows: T[]) {
-    this._flows.addAll(flows);
-    for (const flow of flows) {
+  constructor(readonly items: T[]) {
+    this._flows.addAll(items);
+    for (const flow of items) {
       for (const actor of flow.nextFlows.actors) {
         this._actors.add(actor);
       }

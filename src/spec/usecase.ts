@@ -2,7 +2,7 @@ import { ValidationError } from '../common';
 import { UniqueId, Entity, Name, Summary, implementsHasTestCover } from './core';
 import { Cache } from './cache';
 import { Actor } from './actor';
-import { AltExFlowCollection, AlternateFlow, ExceptionFlow, FlowCollection } from './flow';
+import { AltExFlowCollection, AlternateFlow, ExceptionFlow, FlowCollection, Flow } from './flow';
 import { PreCondition, PostCondition, PrePostCondition } from './prepostcondition';
 import { Glossary, GlossaryCollection } from './glossary';
 import { Valiation } from './valiation';
@@ -78,6 +78,24 @@ export class UseCase extends Entity {
     this.updateFlowsRef();
   }
 
+  getAltExFlowByChildFlow(flow: Flow): AlternateFlow | ExceptionFlow | undefined {
+    for (const aFlow of this.alternateFlows.items) {
+      for (const bFlow of aFlow.nextFlows.items) {
+        if (bFlow.equals(flow)) {
+          return aFlow;
+        }
+      }
+    }
+    for (const eFlow of this.exceptionFlows.items) {
+      for (const bFlow of eFlow.nextFlows.items) {
+        if (bFlow.equals(flow)) {
+          return eFlow;
+        }
+      }
+    }
+    return undefined;
+  }
+
   /**
    * ユースケース内で ID が重複して使われていないことをチェックする
    * ユニークじゃないといけない ID は UniqueId を継承していて、プロパティ名が id のすべて。
@@ -99,8 +117,8 @@ export class UseCase extends Entity {
     }
     validateEntityId(PrePostCondition.getNestedObjects(this.preConditions));
     validateEntityId(PrePostCondition.getNestedObjects(this.postConditions));
-    validateEntityId(this.basicFlows.flows);
-    validateEntityId(this.exceptionFlows.flows);
+    validateEntityId(this.basicFlows.items);
+    validateEntityId(this.exceptionFlows.items);
     validateEntityId(this.valiations);
     for (const v of this.valiations) {
       validateEntityId(v.results);
@@ -126,12 +144,12 @@ export class UseCase extends Entity {
         errMessages.push(`valiations の中に事後条件 ${o.id.text} の検証ルールがありません。`);
       }
     }
-    for (const o of this.alternateFlows.flows) {
+    for (const o of this.alternateFlows.items) {
       if (!o.isTestCover) {
         errMessages.push(`valiations の中に代替フロー ${o.id.text} の検証ルールがありません。`);
       }
     }
-    for (const o of this.exceptionFlows.flows) {
+    for (const o of this.exceptionFlows.items) {
       if (!o.isTestCover) {
         errMessages.push(`valiations の中に例外フロー ${o.id.text} の検証ルールがありません。`);
       }
@@ -143,13 +161,13 @@ export class UseCase extends Entity {
   }
 
   private updateFlowsRef() {
-    for (const flow of this.alternateFlows.flows) {
+    for (const flow of this.alternateFlows.items) {
       for (const srcFlow of flow.sourceFlows) {
         srcFlow.addRefFlow(flow);
       }
       flow.returnFlow.hasBackLink = true;
     }
-    for (const flow of this.exceptionFlows.flows) {
+    for (const flow of this.exceptionFlows.items) {
       for (const srcFlow of flow.sourceFlows) {
         srcFlow.addRefFlow(flow);
       }

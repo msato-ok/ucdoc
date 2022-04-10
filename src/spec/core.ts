@@ -76,3 +76,12 @@ export function walkProps(obj: Record<string, unknown>, path: string[], callback
     callback(obj, path, key, value);
   }
 }
+
+export function entityContains(arrays: Entity[], target: Entity): boolean {
+  for (const a of arrays) {
+    if (a.equals(target)) {
+      return true;
+    }
+  }
+  return false;
+}

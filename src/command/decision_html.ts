@@ -98,15 +98,6 @@ export class DecisionHtmlCommand implements SpecCommand {
   private assembleData(valiation: Valiation, uc: UseCase): string {
     const dt = valiation.decisionTable;
     const dtSection = new DTSection(dt);
-    // v-data-table のデータは、headers に無くて、items にだけあるプロパティは、
-    // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
-    // ヘッダー構成に出力しないようにする。
-    const headerText: Record<string, string | null> = {
-      dt_title: '',
-      factor_or_result: '',
-      factor_item: '',
-      choice: null,
-    };
     function vueTableItem(items: Record<string, any>[]) {
       const data: Record<string, any>[] = [];
       for (const item of items) {
@@ -304,28 +295,3 @@ export class DecisionHtmlCommand implements SpecCommand {
     fs.writeFileSync(mdpath, mdtext);
   }
 }
-/*
-                <v-data-table dense :items="dt.items" :disable-sort="true" class="app-vert-stripes" fixed-header
-                  disable-pagination hide-default-footer>
-
-                  <template v-slot:header>
-                    <thead>
-                      <tr>
-                        <th colspan="3"></th>
-                        <th :class="i%2==1?'':'v-stripe'" v-for="(rule, i) in dt.rules">{{ rule }}</th>
-                      </tr>
-                    </thead>
-                  </template>
-                  <template v-slot:body="{ items }">
-                    <tbody>
-                      <tr v-for="(item, i) in items" :key="i">
-                        <td>{{ item.dt_title }}</td>
-                        <td :colspan="item.factor_item == '' ? 2: 1">{{ item.factor_or_result }}</td>
-                        <td v-if="item.factor_item != ''">{{ item.factor_item }}</td>
-                        <td :class="i%2==1?'':'v-stripe'" v-for="(choice, i) in item.choice">{{ choice }}</td>
-                      </tr>
-                    </tbody>
-                  </template>
-
-               </v-data-table>
-*/

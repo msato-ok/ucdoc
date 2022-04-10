@@ -18,7 +18,7 @@ export class UsecaseCommand implements SpecCommand {
   private writeUc(app: App, uc: UseCase) {
     const basicFlowLines = [];
     const backLinks = new Set<string>();
-    for (const flow of uc.basicFlows.flows) {
+    for (const flow of uc.basicFlows.items) {
       const line = {
         anchor: false,
         label: flow.id.text,
@@ -96,18 +96,18 @@ export class UsecaseCommand implements SpecCommand {
 <% }); -%>
 
 ## 代替フロー
-<%_ uc.alternateFlows.flows.forEach((flow) => { %>
+<%_ uc.alternateFlows.items.forEach((flow) => { %>
 - <%= flow.id.text %>: <%= flow.description.text %> （REF: <%= flow.sourceFlows.map(x => "[" + x.id.text + "][]").join(", ") %>）
-    <%_ flow.nextFlows.flows.forEach((nextFlow) => { %>
+    <%_ flow.nextFlows.items.forEach((nextFlow) => { %>
     - <%= nextFlow.id.text %>: [<%= nextFlow.player.text %>](#<%= nextFlow.player.id.text %>) は、<%= nextFlow.description.text -%>
     <% }); %>
     - [<%= flow.returnFlow.id.text %>][] に戻る
 <% }); %>
 
 ## 例外フロー
-<%_ uc.exceptionFlows.flows.forEach((flow) => { %>
+<%_ uc.exceptionFlows.items.forEach((flow) => { %>
 - <%= flow.id.text %>: <%= flow.description.text %> （REF: <%= flow.sourceFlows.map(x => "[" + x.id.text + "][]").join(", ") %>）
-    <%_ flow.nextFlows.flows.forEach((nextFlow) => { %>
+    <%_ flow.nextFlows.items.forEach((nextFlow) => { %>
     - <%= nextFlow.id.text %>: [<%= nextFlow.player.text %>](#<%= nextFlow.player.id.text %>) は、<%= nextFlow.description.text -%>
     <% }); %>
     - 終了

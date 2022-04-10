@@ -13,7 +13,8 @@ export class Cache<T extends HasKey> {
 
   add(obj: T) {
     if (this._cache.has(obj.key)) {
-      throw new common.ValidationError(`actor(${obj.key}) はユニークにしてください`);
+      const keys = Array.from(this._cache.keys()).join(',');
+      throw new common.ValidationError(`(${obj.key}) はユニークにしてください [${keys}]`);
     }
     this._cache.set(obj.key, obj);
   }

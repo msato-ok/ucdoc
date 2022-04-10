@@ -3,22 +3,14 @@ import { Cache } from './cache';
 import { Actor, ActorId } from './actor';
 import { UseCase, UseCaseId } from './usecase';
 import { GlossaryCollection, Glossary, GlossaryId, GlossaryCategory } from './glossary';
-import { Scenario } from './scenario';
 
 export class App {
   private _actors: Cache<Actor> = new Cache<Actor>();
   private _usecases: Cache<UseCase> = new Cache<UseCase>();
-  private _scenarios: Cache<Scenario> = new Cache<Scenario>();
 
-  constructor(
-    readonly actors: Actor[],
-    readonly usecases: UseCase[],
-    readonly scenarios: Scenario[],
-    readonly glossaries: GlossaryCollection
-  ) {
+  constructor(readonly actors: Actor[], readonly usecases: UseCase[], readonly glossaries: GlossaryCollection) {
     this._actors.addAll(actors);
     this._usecases.addAll(usecases);
-    this._scenarios.addAll(scenarios);
     this.validate();
   }
 
