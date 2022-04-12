@@ -197,22 +197,34 @@ export class UcScenarioCollectionFactory {
 
   static genAltExScenarioFlow(uc: UseCase, altExFlow: AlternateFlow | ExceptionFlow): FlowCollection {
     let flows: Flow[] = [];
+    let searchRestartPoint = true;
+    if (altExFlow instanceof ExceptionFlow) {
+      searchRestartPoint = false;
+    }
     for (const bFlow of uc.basicFlows.items) {
       let branchFlows: Flow[] = [];
+      let foundBranch = false;
       for (const refFlow of bFlow.refFlows) {
         if (refFlow.equals(altExFlow)) {
           branchFlows = refFlow.nextFlows.items;
+          foundBranch = true;
           break;
         }
       }
-      if (branchFlows.length > 0) {
+      if (foundBranch) {
         flows = flows.concat(branchFlows);
         break;
       }
       flows.push(bFlow);
+      if (searchRestartPoint) {
+        const altFlow = altExFlow as AlternateFlow;
+        if (bFlow.equals(altFlow.returnFlow)) {
+          searchRestartPoint = false;
+        }
+      }
     }
-    if (altExFlow instanceof AlternateFlow) {
-      const altFlow = altExFlow;
+    if (searchRestartPoint) {
+      const altFlow = altExFlow as AlternateFlow;
       let restart = false;
       for (const bFlow of uc.basicFlows.items) {
         if (bFlow.equals(altFlow.returnFlow)) {

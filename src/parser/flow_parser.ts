@@ -21,10 +21,10 @@ export function parseBasicFlows(
   actorDic: Cache<Actor>,
   glossaries: GlossaryCollection
 ): Flow[] {
-  if (!flowPropsArray) {
-    throw new ParseError('定義がありません');
-  }
   const flows: Flow[] = [];
+  if (!flowPropsArray) {
+    return flows;
+  }
   for (const [id, props] of Object.entries(flowPropsArray)) {
     ctx.push([id]);
     ctx.push(['playerId']);
