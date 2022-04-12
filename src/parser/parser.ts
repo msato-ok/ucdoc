@@ -208,7 +208,7 @@ function replaceKeyword(ctx: ParserContext, data: IAppProps, app: App): Map<stri
         const index: number = matches['index'];
         const prefix = text.substring(0, index);
         const sufix = text.substring(index + matches[0].length);
-        const replacement = `[${glossary.id.text}][]`;
+        const replacement = `「${glossary.id.text}」`;
         text = `${prefix}${replacement}${sufix}`;
       } while (matches);
       if (name == 'playerId') {
