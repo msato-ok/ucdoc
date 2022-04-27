@@ -3,7 +3,7 @@ import { ParseError } from '../common';
 import { Cache } from '../spec/cache';
 import { Description } from '../spec/core';
 import { PreCondition, PrePostConditionId, PostCondition } from '../spec/prepostcondition';
-import { Flow, FlowId, AltExFlowCollection, AlternateFlow, ExceptionFlow } from '../spec/flow';
+import { Flow, FlowId, AltExFlowCollection, AlternateFlow, ExceptionFlow, FlowCollection } from '../spec/flow';
 import {
   Valiation,
   ValiationId,
@@ -24,24 +24,27 @@ export function parseValiations(
   valiationPropsArray: Record<string, IValiationProps>,
   preConditionDic: Cache<PreCondition>,
   postConditionDic: Cache<PostCondition>,
-  basicFlowDic: Cache<Flow>,
+  basicFlows: FlowCollection,
   alternateFlows: AltExFlowCollection<AlternateFlow>,
   exceptionFlows: AltExFlowCollection<ExceptionFlow>,
   factorDic: Cache<Factor>,
   strictValidation: boolean
 ): Valiation[] {
-  ctx.push(['valiations']);
+  const basicFlowDic = new Cache<Flow>();
+  basicFlowDic.addAll(basicFlows.items);
+
+  ctx.push('valiations');
   const valiations: Valiation[] = [];
   if (valiationPropsArray) {
     for (const [id, props] of Object.entries(valiationPropsArray)) {
-      ctx.push([id]);
+      ctx.push(id);
       const sourceFlows: Flow[] = [];
       const sourcePreConds: PreCondition[] = [];
-      ctx.push(['injectIds']);
-      for (const id of props.injectIds) {
-        ctx.push([id]);
-        const cond = preConditionDic.get(new PrePostConditionId(id));
-        const flow = basicFlowDic.get(new FlowId(id));
+      ctx.push('injectIds');
+      for (const injectId of props.injectIds) {
+        ctx.push(injectId);
+        const cond = preConditionDic.get(new PrePostConditionId(injectId));
+        const flow = basicFlowDic.get(new FlowId(injectId));
         if (cond) {
           sourcePreConds.push(cond);
         } else if (flow) {
@@ -49,28 +52,28 @@ export function parseValiations(
         } else {
           throw new ParseError('preConditions および basicFlows に未定義です。');
         }
-        ctx.pop();
+        ctx.pop(injectId);
       }
       if (sourcePreConds.length == 0 && sourceFlows.length == 0) {
         throw new ParseError('injectIds が未定義です。');
       }
-      ctx.pop();
+      ctx.pop('injectIds');
       const factors = [];
       const factorInValiation = new Cache<Factor>();
-      ctx.push(['factorIds']);
+      ctx.push('factorIds');
       for (const factorId of props.factorIds) {
-        ctx.push([factorId]);
+        ctx.push(factorId);
         const factor = factorDic.get(new FactorId(factorId));
         if (!factor) {
           throw new ParseError(`${factorId} は factors に未定義です。`);
         }
         factors.push(factor);
         factorInValiation.add(factor);
-        ctx.pop();
+        ctx.pop(factorId);
       }
-      ctx.pop();
+      ctx.pop('factorIds');
       const results = [];
-      ctx.push(['results']);
+      ctx.push('results');
       for (const [resultId, resultProps] of Object.entries(props.results)) {
         const vr = parseValiationResult(
           ctx,
@@ -83,7 +86,7 @@ export function parseValiations(
         );
         results.push(vr);
       }
-      ctx.pop();
+      ctx.pop('results');
       const pictCombi = PictCombiFactory.getInstance(factors);
       const valiation = new Valiation(
         new ValiationId(id),
@@ -103,10 +106,10 @@ export function parseValiations(
         console.warn(`WARN: ${ctx.pathText}: ${errmsg}`);
       }
       valiations.push(valiation);
-      ctx.pop();
+      ctx.pop(id);
     }
   }
-  ctx.pop();
+  ctx.pop('valiations');
   return valiations;
 }
 
@@ -119,44 +122,44 @@ function parseValiationResult(
   exceptionFlows: AltExFlowCollection<ExceptionFlow>,
   factorInValiation: Cache<Factor>
 ): ValiationResult {
-  ctx.push([resultId]);
+  ctx.push(resultId);
   const choices = new FactorItemChoiceCollection();
   for (const factor of factorInValiation.values()) {
     choices.addAll(factor);
   }
-  ctx.push(['arrow']);
+  ctx.push('arrow');
   let arrows;
   if (resultProps.arrow) {
     arrows = parseFactorItemChoiceCollection(ctx, factorInValiation, resultProps.arrow);
   } else {
     arrows = choices.copy();
   }
-  ctx.pop();
-  ctx.push(['disarrow']);
+  ctx.pop('arrow');
+  ctx.push('disarrow');
   let disarrows;
   if (resultProps.disarrow) {
     disarrows = parseFactorItemChoiceCollection(ctx, factorInValiation, resultProps.disarrow);
   } else {
     disarrows = new FactorItemChoiceCollection();
   }
-  ctx.pop();
+  ctx.pop('disarrow');
   const order = resultProps.order ? resultProps.order : 'arrow';
   if (order == 'arrow') {
-    ctx.push(['arrow']);
+    ctx.push('arrow');
     choices.arrow(arrows);
-    ctx.pop();
-    ctx.push(['disarrow']);
+    ctx.pop('arrow');
+    ctx.push('disarrow');
     choices.disarrow(disarrows);
-    ctx.pop();
+    ctx.pop('disarrow');
   } else {
-    ctx.push(['disarrow']);
+    ctx.push('disarrow');
     choices.disarrow(disarrows);
-    ctx.pop();
-    ctx.push(['arrow']);
+    ctx.pop('disarrow');
+    ctx.push('arrow');
     choices.arrow(arrows);
-    ctx.pop();
+    ctx.pop('arrow');
   }
-  ctx.push(['checkIds']);
+  ctx.push('checkIds');
   if (!resultProps.checkIds) {
     throw new ParseError('checkIds の定義は必須です。');
   }
@@ -174,14 +177,14 @@ function parseValiationResult(
     }
     checkPoints.push(checkPoint);
   }
-  ctx.pop();
+  ctx.pop('checkIds');
   const results = new ValiationResult(
     new ValiationResultId(resultId),
     new Description(resultProps.desc),
     choices,
     checkPoints
   );
-  ctx.pop();
+  ctx.pop(resultId);
   return results;
 }
 
@@ -195,22 +198,22 @@ function parseFactorItemChoiceCollection(
     return adChoices;
   }
   for (const [factorId, factorItems] of Object.entries(ad)) {
-    ctx.push([factorId]);
+    ctx.push(factorId);
     const factor = factorInValiation.get(factorId);
     if (!factor) {
       throw new ParseError(`${factorId} は factorIds の中で未定義です。`);
     }
     for (const item of factorItems) {
-      ctx.push([item]);
+      ctx.push(item);
       const itemObj = new FactorItem(item);
       if (!factor.existsItem(itemObj)) {
         throw new ParseError(`${item} は factors/${factorId}/items の中で未定義です。`);
       }
       const choice = new FactorItemChoice(factor, itemObj);
       adChoices.add(choice);
-      ctx.pop();
+      ctx.pop(item);
     }
-    ctx.pop();
+    ctx.pop(factorId);
   }
   return adChoices;
 }

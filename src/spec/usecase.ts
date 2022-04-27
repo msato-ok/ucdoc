@@ -80,16 +80,20 @@ export class UseCase extends Entity {
 
   getAltExFlowByChildFlow(flow: Flow): AlternateFlow | ExceptionFlow | undefined {
     for (const aFlow of this.alternateFlows.items) {
-      for (const bFlow of aFlow.nextFlows.items) {
-        if (bFlow.equals(flow)) {
-          return aFlow;
+      for (const ov of aFlow.overrideFlows) {
+        for (const bFlow of ov.replaceFlows.items) {
+          if (bFlow.equals(flow)) {
+            return aFlow;
+          }
         }
       }
     }
     for (const eFlow of this.exceptionFlows.items) {
-      for (const bFlow of eFlow.nextFlows.items) {
-        if (bFlow.equals(flow)) {
-          return eFlow;
+      for (const ov of eFlow.overrideFlows) {
+        for (const bFlow of ov.replaceFlows.items) {
+          if (bFlow.equals(flow)) {
+            return eFlow;
+          }
         }
       }
     }
@@ -162,14 +166,14 @@ export class UseCase extends Entity {
 
   private updateFlowsRef() {
     for (const flow of this.alternateFlows.items) {
-      for (const srcFlow of flow.sourceFlows) {
-        srcFlow.addRefFlow(flow);
+      for (const ovFlow of flow.overrideFlows) {
+        ovFlow.basicFlow.addRefFlow(flow);
+        ovFlow.returnFlow.hasBackLink = true;
       }
-      flow.returnFlow.hasBackLink = true;
     }
     for (const flow of this.exceptionFlows.items) {
-      for (const srcFlow of flow.sourceFlows) {
-        srcFlow.addRefFlow(flow);
+      for (const ovFlow of flow.overrideFlows) {
+        ovFlow.basicFlow.addRefFlow(flow);
       }
     }
   }

@@ -4,23 +4,23 @@ import { Name } from '../spec/core';
 
 export function parseFactor(ctx: ParserContext, data: IAppProps): Factor[] {
   const factors: Factor[] = [];
-  ctx.push(['factors']);
+  ctx.push('factors');
   for (const [id, props] of Object.entries(data.factors)) {
-    ctx.push([id]);
+    ctx.push(id);
     let name = id;
     if (props.name) {
       name = props.name;
     }
     const items = [];
     for (const item of props.items) {
-      ctx.push([item]);
+      ctx.push(item);
       items.push(new FactorItem(item));
-      ctx.pop();
+      ctx.pop(item);
     }
     const o = new Factor(new FactorId(id), new Name(name), items);
     factors.push(o);
-    ctx.pop();
+    ctx.pop(id);
   }
-  ctx.pop();
+  ctx.pop('factors');
   return factors;
 }

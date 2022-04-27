@@ -13,6 +13,8 @@ import {
   ExceptionFlow,
   ExceptionFlowId,
   FlowCollection,
+  AlternateOverrideFlow,
+  ExceptionOverrideFlow,
 } from '../spec/flow';
 
 export function parseBasicFlows(
@@ -20,14 +22,14 @@ export function parseBasicFlows(
   flowPropsArray: Record<string, IFlowProps>,
   actorDic: Cache<Actor>,
   glossaries: GlossaryCollection
-): Flow[] {
+): FlowCollection {
   const flows: Flow[] = [];
   if (!flowPropsArray) {
-    return flows;
+    return new FlowCollection(flows);
   }
   for (const [id, props] of Object.entries(flowPropsArray)) {
-    ctx.push([id]);
-    ctx.push(['playerId']);
+    ctx.push(id);
+    ctx.push('playerId');
     let player: Actor | Glossary | undefined = actorDic.get(new ActorId(props.playerId));
     if (!player) {
       player = glossaries.get(new GlossaryId(props.playerId));
@@ -37,96 +39,107 @@ export function parseBasicFlows(
         `${props.playerId} は定義されていません。actors に追加するか、glossary に追加してください。`
       );
     }
-    ctx.pop();
+    ctx.pop('playerId');
     const flow = new Flow(new FlowId(id), new Description(props.description), player);
     flows.push(flow);
-    ctx.pop();
+    ctx.pop(id);
   }
-  return flows;
+  return new FlowCollection(flows);
 }
 
 export function parseAlternateFlows(
   ctx: ParserContext,
   flowPropsArray: Record<string, IAlternateFlowProps>,
-  basicFlowDic: Cache<Flow>,
+  basicFlows: FlowCollection,
   actorDic: Cache<Actor>,
   glossaries: GlossaryCollection
 ): AltExFlowCollection<AlternateFlow> {
-  ctx.push(['alternateFlows']);
+  const basicFlowDic = new Cache<Flow>();
+  basicFlowDic.addAll(basicFlows.items);
+
+  ctx.push('alternateFlows');
   const flows: AlternateFlow[] = [];
   if (flowPropsArray) {
     for (const [id, props] of Object.entries(flowPropsArray)) {
-      ctx.push([id]);
-      const sourceFlows: Flow[] = [];
-      ctx.push(['sourceFlowIds']);
-      for (const sourceFlowId of props.sourceFlowIds) {
-        const flow = basicFlowDic.get(new FlowId(sourceFlowId));
-        if (!flow) {
-          throw new ParseError(`${sourceFlowId} は未定義です。`);
+      ctx.push(id);
+      ctx.push('override');
+      const overrideFLows: AlternateOverrideFlow[] = [];
+      for (const [basicId, overrideProps] of Object.entries(props.override)) {
+        ctx.push(basicId);
+        const basicFlow = basicFlowDic.get(basicId);
+        if (!basicFlow) {
+          throw new ParseError(`${basicId} は basicFlows の中にありません。`);
         }
-        sourceFlows.push(flow);
+        ctx.push('replaceFlows');
+        const replaceFlows = parseBasicFlows(ctx, overrideProps.replaceFlows, actorDic, glossaries);
+        ctx.pop('replaceFlows');
+        ctx.push('returnFlow');
+        const returnFlow = basicFlowDic.get(new FlowId(overrideProps.returnFlowId));
+        if (!returnFlow) {
+          throw new ParseError(`${overrideProps.returnFlowId} は basicFlows の中にありません。`);
+        }
+        const overrideFLow = new AlternateOverrideFlow(basicFlow, replaceFlows, returnFlow);
+        overrideFLows.push(overrideFLow);
+        ctx.pop('returnFlow');
+        ctx.pop(basicId);
       }
-      ctx.pop();
-      ctx.push(['nextFlows']);
-      const nextFlows = parseBasicFlows(ctx, props.nextFlows, actorDic, glossaries);
-      ctx.pop();
-      ctx.push(['returnFlow']);
-      const returnFlow = basicFlowDic.get(new FlowId(props.returnFlowId));
-      if (!returnFlow) {
-        throw new ParseError(`${props.returnFlowId} は未定義です。`);
-      }
-      ctx.pop();
+      ctx.pop('override');
       const flow = new AlternateFlow(
         new AlternateFlowId(id),
         new Description(props.description),
-        sourceFlows,
-        new FlowCollection(nextFlows),
-        returnFlow
+        overrideFLows,
+        basicFlows
       );
       flows.push(flow);
-      ctx.pop();
+      ctx.pop(id);
     }
   }
   const collection = new AltExFlowCollection<AlternateFlow>(flows);
-  ctx.pop();
+  ctx.pop('alternateFlows');
   return collection;
 }
 
 export function parseExceptionFlows(
   ctx: ParserContext,
   flowPropsArray: Record<string, IExceptionFlowProps>,
-  basicFlowDic: Cache<Flow>,
+  basicFlows: FlowCollection,
   actorDic: Cache<Actor>,
   glossaries: GlossaryCollection
 ): AltExFlowCollection<ExceptionFlow> {
-  ctx.push(['exceptionFlows']);
+  const basicFlowDic = new Cache<Flow>();
+  basicFlowDic.addAll(basicFlows.items);
+
+  ctx.push('exceptionFlows');
   const flows: ExceptionFlow[] = [];
   if (flowPropsArray) {
     for (const [id, props] of Object.entries(flowPropsArray)) {
-      ctx.push([id]);
-      const sourceFlows: Flow[] = [];
-      ctx.push(['sourceFlowIds']);
-      for (const sourceFlowId of props.sourceFlowIds) {
-        const flow = basicFlowDic.get(new FlowId(sourceFlowId));
-        if (!flow) {
-          throw new ParseError(`${sourceFlowId} は未定義です。`);
+      ctx.push(id);
+      ctx.push('override');
+      const overrideFLows: ExceptionOverrideFlow[] = [];
+      for (const [basicId, overrideProps] of Object.entries(props.override)) {
+        ctx.push(basicId);
+        const basicFlow = basicFlowDic.get(basicId);
+        if (!basicFlow) {
+          throw new ParseError(`${basicId} は basicFlows の中にありません。`);
         }
-        sourceFlows.push(flow);
+        ctx.push('replaceFlows');
+        const replaceFlows = parseBasicFlows(ctx, overrideProps.replaceFlows, actorDic, glossaries);
+        ctx.pop('replaceFlows');
+        const overrideFLow = new ExceptionOverrideFlow(basicFlow, replaceFlows);
+        overrideFLows.push(overrideFLow);
+        ctx.pop(basicId);
       }
-      ctx.pop();
-      ctx.push(['nextFlows']);
-      const nextFlows = parseBasicFlows(ctx, props.nextFlows, actorDic, glossaries);
-      ctx.pop();
+      ctx.pop('override');
       const flow = new ExceptionFlow(
         new ExceptionFlowId(id),
         new Description(props.description),
-        sourceFlows,
-        new FlowCollection(nextFlows)
+        overrideFLows,
+        basicFlows
       );
       flows.push(flow);
-      ctx.pop();
+      ctx.pop(id);
     }
   }
-  ctx.pop();
+  ctx.pop('exceptionFlows');
   return new AltExFlowCollection<ExceptionFlow>(flows);
 }

@@ -24,36 +24,37 @@ export function parseUsecase(
     strictValidation = false;
   }
 
-  ctx.push(['usecases']);
+  ctx.push('usecases');
   const usecases: UseCase[] = [];
   for (const [id, props] of Object.entries(data.usecases)) {
-    ctx.push([id]);
-    ctx.push(['preConditions']);
+    ctx.push(id);
+    ctx.push('preConditions');
     const preConditions: PreCondition[] = parsePrePostCondition(PreCondition, ctx, props.preConditions);
     const preConditionDic = new Cache<PreCondition>();
     preConditionDic.addAll(PrePostCondition.getNestedObjects(preConditions));
-    ctx.pop();
-    ctx.push(['postConditions']);
+    ctx.pop('preConditions');
+
+    ctx.push('postConditions');
     const postConditions: PostCondition[] = parsePrePostCondition(PostCondition, ctx, props.postConditions);
     const postConditionDic = new Cache<PostCondition>();
     postConditionDic.addAll(<PostCondition[]>PrePostCondition.getNestedObjects(postConditions));
-    ctx.pop();
-    ctx.push(['basicFlows']);
-    const basicFlows: Flow[] = parseBasicFlows(ctx, props.basicFlows, actorDic, glossaries);
-    ctx.pop();
-    const basicFlowDic = new Cache<Flow>();
-    basicFlowDic.addAll(basicFlows);
+    ctx.pop('postConditions');
+
+    ctx.push('basicFlows');
+    const basicFlows = parseBasicFlows(ctx, props.basicFlows, actorDic, glossaries);
+    ctx.pop('basicFlows');
+
     const alternateFlows: AltExFlowCollection<AlternateFlow> = parseAlternateFlows(
       ctx,
       props.alternateFlows,
-      basicFlowDic,
+      basicFlows,
       actorDic,
       glossaries
     );
     const exceptionFlows: AltExFlowCollection<ExceptionFlow> = parseExceptionFlows(
       ctx,
       props.exceptionFlows,
-      basicFlowDic,
+      basicFlows,
       actorDic,
       glossaries
     );
@@ -71,7 +72,7 @@ export function parseUsecase(
       props.valiations,
       preConditionDic,
       postConditionDic,
-      basicFlowDic,
+      basicFlows,
       alternateFlows,
       exceptionFlows,
       factorDic,
@@ -84,7 +85,7 @@ export function parseUsecase(
       new Summary(props.summary),
       preConditions,
       postConditions,
-      new FlowCollection(basicFlows),
+      basicFlows,
       alternateFlows,
       exceptionFlows,
       valiations,
@@ -96,9 +97,9 @@ export function parseUsecase(
     }
 
     usecases.push(usecase);
-    ctx.pop();
+    ctx.pop(id);
   }
-  ctx.pop();
+  ctx.pop('usecases');
   return usecases;
 }
 
@@ -122,12 +123,12 @@ function parsePrePostCondition<T extends PrePostCondition>(
     }
     const cond = new ctor(new PrePostConditionId(id), new Description(desc));
     if (props.details) {
-      ctx.push(['details']);
+      ctx.push('details');
       const details = parsePrePostCondition(PreCondition, ctx, props.details);
       for (const detail of details) {
         cond.addDetail(detail);
       }
-      ctx.pop();
+      ctx.pop('details');
     }
     conditions.push(cond);
   }

@@ -68,19 +68,29 @@ export interface IFlowProps {
   description: string;
 }
 
-export interface IAltExFlowProps {
-  sourceFlowIds: string[];
-  description: string;
-  nextFlows: {
+export interface IOverrideFlowProps {
+  replaceFlows: {
     [key: string]: IFlowProps;
   };
 }
 
-export interface IAlternateFlowProps extends IAltExFlowProps {
+export interface IAltOverrideFlowProps extends IOverrideFlowProps {
   returnFlowId: string;
 }
 
-export type IExceptionFlowProps = IAltExFlowProps;
+export interface IAlternateFlowProps {
+  description: string;
+  override: {
+    [key: string]: IAltOverrideFlowProps;
+  };
+}
+
+export interface IExceptionFlowProps {
+  description: string;
+  override: {
+    [key: string]: IOverrideFlowProps;
+  };
+}
 
 export interface IValiationProps {
   injectIds: string[];
@@ -125,21 +135,28 @@ export interface IGlossaryProps {
 
 export class ParserContext {
   private _path: string[] = [];
-  private _stack: string[][] = [];
 
   get pathText(): string {
     return this._path.join('/');
   }
-  push(p: string[]): void {
-    this._stack.push(this._path);
-    this._path = this._path.concat(p);
+  push(p: string): void {
+    this._path.push(p);
   }
-  pop(): void {
-    const lastPath = this._stack.pop();
-    if (!lastPath) {
-      throw new InvalidArgumentError('push されていない');
+  pushAll(pp: string[]): void {
+    for (const p of pp) {
+      this.push(p);
     }
-    this._path = lastPath;
+  }
+  pop(p: string): void {
+    const lastPath = this._path.pop();
+    if (p != lastPath) {
+      throw new InvalidArgumentError(`push と pop が一致していない expected=${p}, actual=${lastPath}`);
+    }
+  }
+  popAll(pp: string[]): void {
+    for (let i = pp.length - 1; i >= 0; i--) {
+      this.pop(pp[i]);
+    }
   }
 }
 
@@ -181,7 +198,7 @@ function replaceKeyword(ctx: ParserContext, data: IAppProps, app: App): Map<stri
       if (typeof val !== 'string') {
         return;
       }
-      ctx.push(path);
+      ctx.pushAll(path);
       let text = val;
       let matches;
       do {
@@ -221,7 +238,7 @@ function replaceKeyword(ctx: ParserContext, data: IAppProps, app: App): Map<stri
         }
       }
       obj[name] = text;
-      ctx.pop();
+      ctx.popAll(path);
     }
   );
   return ucGlossaries;

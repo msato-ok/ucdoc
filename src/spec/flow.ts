@@ -48,6 +48,24 @@ export class FlowCollection {
     return Array.from(this._players);
   }
 
+  indexOf(flow: Flow): number {
+    for (let i = 0; i < this.items.length; i++) {
+      if (flow.equals(this.items[i])) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  contains(flow: Flow): boolean {
+    for (const bFlow of this.items) {
+      if (flow.equals(bFlow)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   constructor(readonly items: Flow[]) {
     this._flows.addAll(items);
     for (const flow of items) {
@@ -59,16 +77,70 @@ export class FlowCollection {
   }
 }
 
+export class OverrideFlow {
+  constructor(readonly basicFlow: Flow, readonly replaceFlows: FlowCollection) {}
+}
+
+export class AlternateOverrideFlow extends OverrideFlow {
+  constructor(readonly basicFlow: Flow, readonly replaceFlows: FlowCollection, readonly returnFlow: Flow) {
+    super(basicFlow, replaceFlows);
+  }
+}
+
+export class ExceptionOverrideFlow extends OverrideFlow {
+  constructor(readonly basicFlow: Flow, readonly replaceFlows: FlowCollection) {
+    super(basicFlow, replaceFlows);
+  }
+}
+
 export abstract class AbstractAltExFlow extends Entity implements HasTestCover {
+  readonly mergedFlows: FlowCollection;
   private _testCover = false;
 
   constructor(
     readonly id: AlternateFlowId | ExceptionFlowId,
     readonly description: Description,
-    readonly sourceFlows: Flow[],
-    readonly nextFlows: FlowCollection
+    readonly overrideFlows: OverrideFlow[],
+    readonly basicFlows: FlowCollection
   ) {
     super(id);
+    let altFlowItems: Flow[] = [];
+    let startIndex = 0;
+    let overrideIndex = 0;
+    for (let i = 0; i < overrideFlows.length; i++) {
+      const overrideFlow = overrideFlows[i];
+      overrideIndex = basicFlows.indexOf(overrideFlow.basicFlow);
+      if (overrideIndex == -1) {
+        throw new ValidationError(
+          `basicFlows の中に ${overrideFlow.basicFlow.id.text} がありません。あるいは、定義順に問題があります。`
+        );
+      }
+      altFlowItems = altFlowItems.concat(basicFlows.items.slice(startIndex, overrideIndex));
+      altFlowItems = altFlowItems.concat(overrideFlow.replaceFlows.items);
+      if (overrideFlow instanceof AlternateOverrideFlow) {
+        const altOverrideFlow = overrideFlow;
+        startIndex = basicFlows.indexOf(altOverrideFlow.returnFlow);
+        if (startIndex < overrideIndex) {
+          if (overrideIndex < overrideFlows.length - 1) {
+            throw new ValidationError(
+              `returnFlow が分岐元よりも前のフローに戻る場合、最後の override である必要があります。 分岐元=${overrideFlow.basicFlow.id.text}, returnFlow=${altOverrideFlow.returnFlow.id.text}`
+            );
+          }
+        }
+      }
+    }
+    if (startIndex > overrideIndex) {
+      altFlowItems = altFlowItems.concat(basicFlows.items.slice(startIndex));
+    }
+    this.mergedFlows = new FlowCollection(altFlowItems);
+  }
+
+  get refText(): string {
+    const refIds = [];
+    for (const ov of this.overrideFlows) {
+      refIds.push(ov.basicFlow.id.text);
+    }
+    return refIds.join(', ');
   }
 
   get isTestCover(): boolean {
@@ -86,11 +158,10 @@ export class AlternateFlow extends AbstractAltExFlow {
   constructor(
     readonly id: AlternateFlowId,
     readonly description: Description,
-    readonly sourceFlows: Flow[],
-    readonly nextFlows: FlowCollection,
-    readonly returnFlow: Flow
+    readonly overrideFlows: AlternateOverrideFlow[],
+    readonly basicFlows: FlowCollection
   ) {
-    super(id, description, sourceFlows, nextFlows);
+    super(id, description, overrideFlows, basicFlows);
   }
 }
 
@@ -100,10 +171,10 @@ export class ExceptionFlow extends AbstractAltExFlow {
   constructor(
     readonly id: ExceptionFlowId,
     readonly description: Description,
-    readonly sourceFlows: Flow[],
-    readonly nextFlows: FlowCollection
+    readonly overrideFlows: ExceptionOverrideFlow[],
+    readonly basicFlows: FlowCollection
   ) {
-    super(id, description, sourceFlows, nextFlows);
+    super(id, description, overrideFlows, basicFlows);
   }
 }
 
@@ -122,11 +193,11 @@ export class AltExFlowCollection<T extends AbstractAltExFlow> {
 
   constructor(readonly items: T[]) {
     this._flows.addAll(items);
-    for (const flow of items) {
-      for (const actor of flow.nextFlows.actors) {
+    for (const item of items) {
+      for (const actor of item.mergedFlows.actors) {
         this._actors.add(actor);
       }
-      for (const player of flow.nextFlows.players) {
+      for (const player of item.mergedFlows.players) {
         this._players.add(player);
       }
     }

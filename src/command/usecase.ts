@@ -88,19 +88,23 @@ export class UsecaseCommand implements SpecCommand {
 <% }); -%>
 
 ## 代替フロー
-<%_ uc.alternateFlows.items.forEach((flow) => { %>
-- <%= flow.id.text %>: <%= flow.description.text %> （REF: <%= flow.sourceFlows.map(x => x.id.text).join(", ") %>）
-    <%_ flow.nextFlows.items.forEach((nextFlow) => { %>
-    - <%= nextFlow.id.text %>: <%= nextFlow.player.text %> は、<%= nextFlow.description.text -%>
+<%_ uc.alternateFlows.items.forEach((altFlow) => { %>
+- <%= altFlow.id.text %>: <%= altFlow.description.text %> （REF: <%= altFlow.refText %>）
+    <%_ altFlow.overrideFlows.forEach((ov) => { %>
+      <%_ ov.replaceFlows.items.forEach((replFlow) => { %>
+    - <%= replFlow.id.text %>: <%= replFlow.player.text %> は、<%= replFlow.description.text -%>
+      <% }); %>
+    - <%= ov.returnFlow.id.text %> に戻る
     <% }); %>
-    - <%= flow.returnFlow.id.text %> に戻る
 <% }); %>
 
 ## 例外フロー
-<%_ uc.exceptionFlows.items.forEach((flow) => { %>
-- <%= flow.id.text %>: <%= flow.description.text %> （REF: <%= flow.sourceFlows.map(x => x.id.text).join(", ") %>）
-    <%_ flow.nextFlows.items.forEach((nextFlow) => { %>
-    - <%= nextFlow.id.text %>: <%= nextFlow.player.text %> は、<%= nextFlow.description.text -%>
+<%_ uc.exceptionFlows.items.forEach((exFlow) => { %>
+- <%= exFlow.id.text %>: <%= exFlow.description.text %> （REF: <%= exFlow.refText %>）
+    <%_ exFlow.overrideFlows.forEach((ov) => { %>
+      <%_ ov.replaceFlows.items.forEach((replFlow) => { %>
+    - <%= replFlow.id.text %>: <%= replFlow.player.text %> は、<%= replFlow.description.text -%>
+      <% }); %>
     <% }); %>
     - 終了
 <% }); %>

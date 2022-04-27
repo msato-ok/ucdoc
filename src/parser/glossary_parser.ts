@@ -3,11 +3,11 @@ import { Glossary, GlossaryId, GlossaryCollection, GlossaryCategory } from '../s
 import { Description, Name, Url } from '../spec/core';
 
 export function parseGlossary(ctx: ParserContext, data: IAppProps): GlossaryCollection {
-  ctx.push(['glossaries']);
+  ctx.push('glossaries');
   const glossaries: Glossary[] = [];
   for (const [cat, glossariesByCat] of Object.entries(data.glossaries)) {
     for (const [id, props] of Object.entries(glossariesByCat)) {
-      ctx.push([id]);
+      ctx.push(id);
       let o: Glossary;
       if (!props) {
         o = new Glossary(new GlossaryId(id), new GlossaryCategory(cat));
@@ -21,9 +21,9 @@ export function parseGlossary(ctx: ParserContext, data: IAppProps): GlossaryColl
         );
       }
       glossaries.push(o);
-      ctx.pop();
+      ctx.pop(id);
     }
   }
-  ctx.pop();
+  ctx.pop('glossaries');
   return new GlossaryCollection(glossaries);
 }

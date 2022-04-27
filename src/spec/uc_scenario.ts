@@ -35,11 +35,10 @@ export const BranchType = {
 type BranchType = typeof BranchType[keyof typeof BranchType];
 
 /**
- * テストシナリオフローの表
+ * テストシナリオとシナリオフロー
  *
- * ユースケースのテストシナリオと、明細としてのフローを保持する。
- *
- * このオブジェクトで表現しようとしている表のイメージは以下のとおり。
+ * ユースケースのテストシナリオと、シナリオ毎のフロー明細で構成される。
+ * 表にすると、以下のイメージになる。
  *
  * | フローID | TS01 | TS02 | TS03 | Player ID | 説明                          |
  * | -------- | ---- | ---- | ---- | --------- | ----------------------------- |
@@ -58,7 +57,100 @@ type BranchType = typeof BranchType[keyof typeof BranchType];
  *
  * UcScenarioCollection の中で、横列のテストシナリオを表現しているのは UcScenario になる。
  * 縦行は、基本フローと代替フロー、例外フローが重複無く漏れ無く並んでいる。
+ *
  */
+export class UcScenarioCollection {
+  private _ucScenarios: UcScenario[] = [];
+  private _orderedFlows: Flow[] = [];
+
+  /**
+   * コンストラクタ
+   *
+   * 基本フローは、必須で、"フローID" 列 の横の2列目が基本フローの列になるので、
+   * コンストラクタの引数 base で受け取る。
+   */
+  constructor(readonly basic: UcScenario) {
+    if (basic.ucScenarioType != UcScenarioType.BasicFlowScenario) {
+      throw new InvalidArgumentError(
+        `base は、ucScenarioType が BasicFlowScenario のシナリオで指定してください。
+        id=${basic.id.text}, ucScenarioType=${basic.ucScenarioType}`
+      );
+    }
+    this._ucScenarios.push(basic);
+    for (const flow of basic.flows.items) {
+      this._orderedFlows.push(flow);
+      for (const refFlow of flow.refFlows) {
+        for (const ov of refFlow.overrideFlows) {
+          for (const rFlow of ov.replaceFlows.items) {
+            this._orderedFlows.push(rFlow);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * シナリオを追加する
+   *
+   * 表の列になる
+   */
+  add(targetScenario: UcScenario) {
+    this._ucScenarios.push(targetScenario);
+  }
+
+  /**
+   * フローを取得する
+   *
+   * 表の行になる
+   */
+  get flows(): Flow[] {
+    return this._orderedFlows;
+  }
+
+  /**
+   * シナリオを取得する
+   *
+   * 表の列になる
+   */
+  get scenarios(): UcScenario[] {
+    return this._ucScenarios;
+  }
+
+  /**
+   * シナリオが指定されたフローを実行する場合に true を返す
+   *
+   * 表の中でシナリオとフローの交わるところが ○ になる場合 true を返す
+   */
+  isUsing(flow: Flow, scenario: UcScenario): boolean {
+    return scenario.flows.contains(flow);
+  }
+
+  getBranchType(flow: Flow): string {
+    const scenarios = this.getScenariosByFLow(flow);
+    if (scenarios.length == 0) {
+      throw new InvalidArgumentError(`flow を使っている scenario がない状態は、想定されていない: flow=${flow.id.text}`);
+    }
+    if (scenarios[0].ucScenarioType == UcScenarioType.BasicFlowScenario) {
+      return flow.refFlows.length > 0 ? BranchType.Branch : BranchType.None;
+    } else if (scenarios[0].ucScenarioType == UcScenarioType.AlternateFlowScenario) {
+      return BranchType.Alternate;
+    } else if (scenarios[0].ucScenarioType == UcScenarioType.ExceptionFlowScenario) {
+      return BranchType.Exception;
+    } else {
+      throw new InvalidArgumentError(`unknown ucScenarioType: ${scenarios[0].ucScenarioType}`);
+    }
+  }
+
+  getScenariosByFLow(flow: Flow): UcScenario[] {
+    const flowScenarios = [];
+    for (const scenario of this._ucScenarios) {
+      if (scenario.containsFlow(flow)) {
+        flowScenarios.push(scenario);
+      }
+    }
+    return flowScenarios;
+  }
+}
 
 /**
  * テストシナリオ
@@ -87,76 +179,9 @@ export class UcScenario extends Entity {
       throw new InvalidArgumentError('unknown state ucScenarioType');
     }
   }
-}
 
-/**
- * テストシナリオとシナリオフロー
- *
- * UcScenario をまとめた "テストシナリオフローの表" のオブジェクト.
- *
- */
-export class UcScenarioCollection {
-  private _ucScenarios: UcScenario[] = [];
-  private _orderedFlows: Flow[] = [];
-
-  constructor(readonly base: UcScenario) {
-    if (base.ucScenarioType != UcScenarioType.BasicFlowScenario) {
-      throw new InvalidArgumentError(
-        `base は、ucScenarioType が BasicFlowScenario のシナリオで指定してください。
-        id=${base.id.text}, ucScenarioType=${base.ucScenarioType}`
-      );
-    }
-    this._ucScenarios.push(base);
-    for (const flow of base.flows.items) {
-      this._orderedFlows.push(flow);
-      for (const refFlow of flow.refFlows) {
-        for (const nFlow of refFlow.nextFlows.items) {
-          this._orderedFlows.push(nFlow);
-        }
-      }
-    }
-  }
-
-  get flows(): Flow[] {
-    return this._orderedFlows;
-  }
-
-  get scenarios(): UcScenario[] {
-    return this._ucScenarios;
-  }
-
-  isUsing(flow: Flow, scenario: UcScenario): boolean {
-    return entityContains(scenario.flows.items, flow);
-  }
-
-  getBranchType(flow: Flow): string {
-    const scenarios = this.getScenariosByFLow(flow);
-    if (scenarios.length == 0) {
-      throw new InvalidArgumentError(`flow を使っている scenario がない状態は、想定されていない: flow=${flow.id.text}`);
-    }
-    if (scenarios[0].ucScenarioType == UcScenarioType.BasicFlowScenario) {
-      return flow.refFlows.length > 0 ? BranchType.Branch : BranchType.None;
-    } else if (scenarios[0].ucScenarioType == UcScenarioType.AlternateFlowScenario) {
-      return BranchType.Alternate;
-    } else if (scenarios[0].ucScenarioType == UcScenarioType.ExceptionFlowScenario) {
-      return BranchType.Exception;
-    } else {
-      throw new InvalidArgumentError(`unknown ucScenarioType: ${scenarios[0].ucScenarioType}`);
-    }
-  }
-
-  add(targetScenario: UcScenario) {
-    this._ucScenarios.push(targetScenario);
-  }
-
-  getScenariosByFLow(flow: Flow): UcScenario[] {
-    const flowScenarios = [];
-    for (const scenario of this._ucScenarios) {
-      if (entityContains(scenario.flows.items, flow)) {
-        flowScenarios.push(scenario);
-      }
-    }
-    return flowScenarios;
+  containsFlow(flow: Flow): boolean {
+    return this.flows.contains(flow);
   }
 }
 
@@ -173,7 +198,7 @@ export class UcScenarioCollectionFactory {
       const scenario = new UcScenario(
         this.genScenarioId(testNo++),
         new Description(`代替フロー（${altFlow.description.text}）の検証シナリオ`),
-        this.genAltExScenarioFlow(uc, altFlow),
+        altFlow.mergedFlows,
         altFlow
       );
       ucScenarioCollection.add(scenario);
@@ -182,7 +207,7 @@ export class UcScenarioCollectionFactory {
       const scenario = new UcScenario(
         this.genScenarioId(testNo++),
         new Description(`例外フロー（${exFlow.description.text}）の検証シナリオ`),
-        this.genAltExScenarioFlow(uc, exFlow),
+        exFlow.mergedFlows,
         exFlow
       );
       ucScenarioCollection.add(scenario);
@@ -193,48 +218,5 @@ export class UcScenarioCollectionFactory {
   static genScenarioId(no: number) {
     const scenarioIdPrefix = 'TP';
     return new UcScenarioId(`${scenarioIdPrefix}${util.zeropad(no, 2)}`);
-  }
-
-  static genAltExScenarioFlow(uc: UseCase, altExFlow: AlternateFlow | ExceptionFlow): FlowCollection {
-    let flows: Flow[] = [];
-    let searchRestartPoint = true;
-    if (altExFlow instanceof ExceptionFlow) {
-      searchRestartPoint = false;
-    }
-    for (const bFlow of uc.basicFlows.items) {
-      let branchFlows: Flow[] = [];
-      let foundBranch = false;
-      for (const refFlow of bFlow.refFlows) {
-        if (refFlow.equals(altExFlow)) {
-          branchFlows = refFlow.nextFlows.items;
-          foundBranch = true;
-          break;
-        }
-      }
-      if (foundBranch) {
-        flows = flows.concat(branchFlows);
-        break;
-      }
-      flows.push(bFlow);
-      if (searchRestartPoint) {
-        const altFlow = altExFlow as AlternateFlow;
-        if (bFlow.equals(altFlow.returnFlow)) {
-          searchRestartPoint = false;
-        }
-      }
-    }
-    if (searchRestartPoint) {
-      const altFlow = altExFlow as AlternateFlow;
-      let restart = false;
-      for (const bFlow of uc.basicFlows.items) {
-        if (bFlow.equals(altFlow.returnFlow)) {
-          restart = true;
-        }
-        if (restart) {
-          flows.push(bFlow);
-        }
-      }
-    }
-    return new FlowCollection(flows);
   }
 }
