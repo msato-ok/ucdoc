@@ -93,12 +93,17 @@ export interface IExceptionFlowProps {
 }
 
 export interface IValiationProps {
-  injectIds: string[];
-  factorIds: string[];
+  factorEntryPoints: {
+    [key: string]: IEntryFactorsProps;
+  };
   pictConstraint: string;
   results: {
     [key: string]: IValiationResultProps;
   };
+}
+
+export interface IEntryFactorsProps {
+  factors: string[];
 }
 
 export interface IFactorProps {
@@ -117,7 +122,7 @@ export interface IValiationResultProps {
   disarrow?: {
     [key: string]: string[];
   };
-  checkIds?: string;
+  verificationPointIds?: string;
 }
 
 export interface IScenarioProps {
@@ -160,7 +165,7 @@ export class ParserContext {
   }
 }
 
-export function parse(yamlFiles: string[]): App {
+export function parse(yamlFiles: string[], verbose = false): App {
   let data = {} as IAppProps;
   for (const yml of yamlFiles) {
     const text = fs.readFileSync(yml, 'utf8');
@@ -182,6 +187,9 @@ export function parse(yamlFiles: string[]): App {
     let message = 'unknown error';
     if (e instanceof Error) {
       message = e.message;
+      if (verbose) {
+        console.error(e.stack);
+      }
     }
     throw new ParseError(`ERROR: ${ctx.pathText}: ${message}`);
   }

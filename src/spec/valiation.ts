@@ -3,7 +3,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { UniqueId, Entity, Description, Name, HasText, ValueObject } from './core';
 import { Flow, AlternateFlow, ExceptionFlow } from './flow';
-import { PostCondition } from './prepostcondition';
+import { PreCondition, PostCondition } from './prepostcondition';
 import conf from '../conf';
 import { ValidationError, InvalidArgumentError, BugError } from '../common';
 
@@ -15,7 +15,7 @@ export class Valiation extends Entity {
   constructor(
     readonly id: ValiationId,
     readonly sourceFlows: Flow[],
-    readonly factors: Factor[],
+    readonly factorEntryPoint: FactorEntryPoint,
     readonly pictConstraint: PictConstraint,
     readonly pictCombination: Map<Factor, FactorItem[]>,
     readonly results: ValiationResult[],
@@ -46,7 +46,7 @@ export class Valiation extends Entity {
   get countOfPictPatterns(): number {
     // 組み合わせ数は、どの factor のものでも同じなので、
     // 0 番目のものを使って調べる
-    const combi = this.pictCombination.get(this.factors[0]);
+    const combi = this.pictCombination.get(this.factorEntryPoint.factors[0]);
     if (!combi) {
       throw new BugError();
     }
@@ -109,14 +109,19 @@ export class Valiation extends Entity {
 
 export class ValiationResultId extends UniqueId {}
 
-export type CheckPoint = PostCondition | AlternateFlow | ExceptionFlow;
+/**
+ * 検証内容
+ * 事後条件が成立していることを検証するのか、代替フローへの分岐を検証するのか、
+ * 例外フローへの分岐を検証するのか、それぞれのインスタンスで表す
+ */
+export type VerificationPoint = PostCondition | AlternateFlow | ExceptionFlow;
 
 export class ValiationResult extends Entity {
   constructor(
     readonly id: ValiationResultId,
     readonly desc: Description,
     readonly choices: FactorItemChoiceCollection,
-    readonly checkPoints: CheckPoint[]
+    readonly verificationPoints: VerificationPoint[]
   ) {
     super(id);
   }
@@ -142,6 +147,34 @@ export class Factor extends Entity {
 export class FactorItem extends HasText implements ValueObject {
   constructor(readonly text: string) {
     super(text);
+  }
+}
+
+export type EntryPoint = PreCondition | Flow;
+
+export class FactorEntryPoint {
+  private _entryPoints = new Map<EntryPoint, Set<Factor>>();
+
+  add(entryPoint: EntryPoint, factors: Factor[]): void {
+    let factorSet = this._entryPoints.get(entryPoint);
+    if (!factorSet) {
+      factorSet = new Set<Factor>();
+      this._entryPoints.set(entryPoint, factorSet);
+    }
+    for (const f of factors) {
+      factorSet.add(f);
+    }
+  }
+
+  get factors(): Factor[] {
+    const items = new Set<Factor>();
+    const factors: Set<Factor>[] = Array.from(this._entryPoints.values());
+    for (const ff of factors) {
+      for (const f of Array.from(ff)) {
+        items.add(f);
+      }
+    }
+    return Array.from(items.values());
   }
 }
 

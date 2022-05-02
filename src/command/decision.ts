@@ -1,13 +1,11 @@
 import { App } from '../spec/app';
-import { SpecCommand } from './base';
+import { AbstractSpecCommand } from './base';
 import { UseCase } from '../spec/usecase';
 import { Valiation, DTConditionRuleChoice, DTResultRuleChoice } from '../spec/valiation';
 import fs from 'fs';
 import path from 'path';
 
-export class DecisionCommand implements SpecCommand {
-  constructor(private output: string) {}
-
+export class DecisionCommand extends AbstractSpecCommand {
   public execute(spc: App): void {
     spc.usecases.forEach(uc => {
       this.writeValiations(spc, uc);
@@ -81,7 +79,7 @@ export class DecisionCommand implements SpecCommand {
       }
       lines.push('|' + cols.join('|') + '|');
     }
-    const outPath = path.join(this.output, `${uc.id.text}-${valiation.id.text}.decision.md`);
+    const outPath = path.join(this.option.output, `${uc.id.text}-${valiation.id.text}.decision.md`);
     fs.writeFileSync(outPath, lines.join('\n') + '\n');
   }
 }

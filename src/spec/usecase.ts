@@ -135,9 +135,9 @@ export class UseCase extends Entity {
   private validatePostConditionTestCoverage(strictValidation: boolean) {
     for (const valiation of this.valiations) {
       for (const result of valiation.results) {
-        for (const checkPoint of result.checkPoints) {
-          if (implementsHasTestCover(checkPoint)) {
-            checkPoint.testCover = true;
+        for (const verificationPoint of result.verificationPoints) {
+          if (implementsHasTestCover(verificationPoint)) {
+            verificationPoint.testCover = true;
           }
         }
       }

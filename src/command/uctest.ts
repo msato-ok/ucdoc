@@ -1,5 +1,5 @@
 import { App } from '../spec/app';
-import { SpecCommand } from './base';
+import { AbstractSpecCommand } from './base';
 import { InvalidArgumentError } from '../common';
 import { entityContains } from '../spec/core';
 import ejs from 'ejs';
@@ -99,9 +99,7 @@ class StepSection {
 }
 */
 
-export class UsecaseTestCommand implements SpecCommand {
-  constructor(private output: string) {}
-
+export class UsecaseTestCommand extends AbstractSpecCommand {
   public execute(app: App): void {
     app.usecases.forEach(uc => {
       const ucScenarioCollection = UcScenarioCollectionFactory.getInstance(uc);
@@ -528,7 +526,7 @@ export class UsecaseTestCommand implements SpecCommand {
 %>
 `;
     const mdtext = ejs.render(template.trimStart(), { data: jsondata }, {});
-    const mdpath = path.join(this.output, `${ucId}.html`);
+    const mdpath = path.join(this.option.output, `${ucId}.html`);
     fs.writeFileSync(mdpath, mdtext);
   }
 }

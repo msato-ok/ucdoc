@@ -1,0 +1,94 @@
+# ユースケース
+usecases:
+  UC01:
+    name: 貸出本の予約する
+
+    # 概要
+    summary: |
+      Webで借りたい本を探して予約する
+
+    # 関連情報
+    relatedInfo: |
+      ${ビジネスルール/BR01}
+
+    # 事前条件
+    preConditions:
+      R01: 会員登録が済んでいる
+      R02: 蔵書が登録されている
+
+    # 事後条件
+    postConditions:
+      P01:
+        description: 貸出予約がされている
+        details:
+          P0101: 貸出予約が登録されている
+          P0102: 在庫が確保されている
+          P0103: ${登録完了メール} が送信される
+
+    # 基本フロー
+    basicFlows:
+      B01:
+        playerId: U01
+        description: ${蔵書検索(画面)} で検索条件を入力し、検索を実行する
+      B02:
+        playerId: system
+        description: ${蔵書} を検索して一覧を表示する
+      B03:
+        playerId: U01
+        description: 予約する ${蔵書} を選択する
+      B04:
+        playerId: system
+        description: ${貸出予約登録(画面)} を表示する
+      B05:
+        playerId: U01
+        description: ${貸出予約} をエントリーする
+      B06:
+        playerId: system
+        description: ${貸出予約} を登録して ${登録完了のメッセージ} を表示する
+      B07:
+        playerId: system
+        description: ${登録完了メール} を送信する
+
+    # 代替フロー
+    alternateFlows:
+      A01:
+        description: 検索条件にマッチする蔵書がない
+        override:
+          B02:
+            replaceFlows:
+              A0101:
+                playerId: system
+                description: ${検索条件にマッチする蔵書がない旨のエラーメッセージ} を表示する
+            returnFlowId: B01
+
+    # 例外フロー
+    exceptionFlows:
+      E01:
+        description: 先にエントリーした人がいて予約が成立しなかった
+        override:
+          B06:
+            replaceFlows:
+              E0101:
+                playerId: system
+                description: ${先約があり予約できなかった旨のエラーメッセージ} を表示する
+
+    valiations:
+      V01:
+        factorEntryPoints:
+          R01:
+            factors:
+              - 会員登録状態
+          B01:
+            factors:
+              - 蔵書検索での検索条件
+        pictConstraint: |
+
+        results:
+          VR0101:
+            desc: 会員が有効なときは貸出予約可能
+            arrow: { 会員登録状態: [登録済] }
+            verificationPointIds: [P01]
+          VR0102:
+            desc: 会員が無効化したときにエラーになる
+            arrow: { 会員登録状態: [登録抹消] }
+            verificationPointIds: [E01]

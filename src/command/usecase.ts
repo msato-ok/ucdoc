@@ -4,11 +4,9 @@ import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
 import { App } from '../spec/app';
-import { SpecCommand } from './base';
+import { AbstractSpecCommand } from './base';
 
-export class UsecaseCommand implements SpecCommand {
-  constructor(private output: string) {}
-
+export class UsecaseCommand extends AbstractSpecCommand {
   public execute(spc: App): void {
     spc.usecases.forEach(uc => {
       this.writeUc(spc, uc);
@@ -124,7 +122,7 @@ export class UsecaseCommand implements SpecCommand {
 <% } %>
 `;
     const mdtext = ejs.render(template.trimStart(), data, {});
-    const mdpath = path.join(this.output, `${uc.id.text}.md`);
+    const mdpath = path.join(this.option.output, `${uc.id.text}.md`);
     fs.writeFileSync(mdpath, mdtext);
     console.info(`${mdpath} generated.`);
   }

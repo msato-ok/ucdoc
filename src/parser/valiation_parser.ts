@@ -16,7 +16,9 @@ import {
   FactorItem,
   FactorItemChoice,
   FactorItemChoiceCollection,
-  CheckPoint,
+  FactorEntryPoint,
+  EntryPoint,
+  VerificationPoint,
 } from '../spec/valiation';
 
 export function parseValiations(
@@ -40,38 +42,38 @@ export function parseValiations(
       ctx.push(id);
       const sourceFlows: Flow[] = [];
       const sourcePreConds: PreCondition[] = [];
-      ctx.push('injectIds');
-      for (const injectId of props.injectIds) {
-        ctx.push(injectId);
-        const cond = preConditionDic.get(new PrePostConditionId(injectId));
-        const flow = basicFlowDic.get(new FlowId(injectId));
-        if (cond) {
-          sourcePreConds.push(cond);
-        } else if (flow) {
-          sourceFlows.push(flow);
-        } else {
-          throw new ParseError('preConditions および basicFlows に未定義です。');
+      const factorEntryPoint = new FactorEntryPoint();
+      const factorInValiation = new Cache<Factor>();
+      ctx.push('factorEntryPoints');
+      for (const [entryPointId, entryFactorsProps] of Object.entries(props.factorEntryPoints)) {
+        ctx.push(entryPointId);
+        let entryPoint: EntryPoint | undefined = preConditionDic.get(new PrePostConditionId(entryPointId));
+        if (entryPoint) {
+          sourcePreConds.push(entryPoint);
         }
-        ctx.pop(injectId);
+        if (!entryPoint) {
+          entryPoint = basicFlowDic.get(new FlowId(entryPointId));
+          if (entryPoint) {
+            sourceFlows.push(entryPoint);
+          }
+        }
+        if (!entryPoint) {
+          throw new ParseError(`${entryPointId} は preConditions および basicFlows に未定義です。`);
+        }
+        for (const factorId of entryFactorsProps.factors) {
+          const factor = factorDic.get(new FactorId(factorId));
+          if (!factor) {
+            throw new ParseError(`${factorId} は factors に未定義です。`);
+          }
+          factorEntryPoint.add(entryPoint, [factor]);
+          factorInValiation.add(factor);
+        }
+        ctx.pop(entryPointId);
       }
       if (sourcePreConds.length == 0 && sourceFlows.length == 0) {
-        throw new ParseError('injectIds が未定義です。');
+        throw new ParseError('factorEntryPoints が未定義です。');
       }
-      ctx.pop('injectIds');
-      const factors = [];
-      const factorInValiation = new Cache<Factor>();
-      ctx.push('factorIds');
-      for (const factorId of props.factorIds) {
-        ctx.push(factorId);
-        const factor = factorDic.get(new FactorId(factorId));
-        if (!factor) {
-          throw new ParseError(`${factorId} は factors に未定義です。`);
-        }
-        factors.push(factor);
-        factorInValiation.add(factor);
-        ctx.pop(factorId);
-      }
-      ctx.pop('factorIds');
+      ctx.pop('factorEntryPoints');
       const results = [];
       ctx.push('results');
       for (const [resultId, resultProps] of Object.entries(props.results)) {
@@ -87,11 +89,11 @@ export function parseValiations(
         results.push(vr);
       }
       ctx.pop('results');
-      const pictCombi = PictCombiFactory.getInstance(factors);
+      const pictCombi = PictCombiFactory.getInstance(factorEntryPoint.factors);
       const valiation = new Valiation(
         new ValiationId(id),
         sourceFlows,
-        factors,
+        factorEntryPoint,
         new PictConstraint(props.pictConstraint),
         pictCombi,
         results,
@@ -159,30 +161,30 @@ function parseValiationResult(
     choices.arrow(arrows);
     ctx.pop('arrow');
   }
-  ctx.push('checkIds');
-  if (!resultProps.checkIds) {
-    throw new ParseError('checkIds の定義は必須です。');
+  ctx.push('verificationPointIds');
+  if (!resultProps.verificationPointIds) {
+    throw new ParseError('verificationPointIds の定義は必須です。');
   }
-  const checkPoints: CheckPoint[] = [];
-  for (const id of resultProps.checkIds) {
-    let checkPoint: CheckPoint | undefined = postConditionDic.get(id);
-    if (!checkPoint) {
-      checkPoint = alternateFlows.get(id);
+  const verificationPoints: VerificationPoint[] = [];
+  for (const id of resultProps.verificationPointIds) {
+    let verificationPoint: VerificationPoint | undefined = postConditionDic.get(id);
+    if (!verificationPoint) {
+      verificationPoint = alternateFlows.get(id);
     }
-    if (!checkPoint) {
-      checkPoint = exceptionFlows.get(id);
+    if (!verificationPoint) {
+      verificationPoint = exceptionFlows.get(id);
     }
-    if (!checkPoint) {
+    if (!verificationPoint) {
       throw new ParseError(`${id} は postConditions, alternateFlows, exceptionFlows に未定義です。`);
     }
-    checkPoints.push(checkPoint);
+    verificationPoints.push(verificationPoint);
   }
-  ctx.pop('checkIds');
+  ctx.pop('verificationPointIds');
   const results = new ValiationResult(
     new ValiationResultId(resultId),
     new Description(resultProps.desc),
     choices,
-    checkPoints
+    verificationPoints
   );
   ctx.pop(resultId);
   return results;
@@ -201,7 +203,7 @@ function parseFactorItemChoiceCollection(
     ctx.push(factorId);
     const factor = factorInValiation.get(factorId);
     if (!factor) {
-      throw new ParseError(`${factorId} は factorIds の中で未定義です。`);
+      throw new ParseError(`${factorId} は factors の中で未定義です。`);
     }
     for (const item of factorItems) {
       ctx.push(item);

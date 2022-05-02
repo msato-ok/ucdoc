@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { SpecCommand } from './command/base';
+import { SpecCommand, ICommandOption } from './command/base';
 import { UsecaseCommand } from './command/usecase';
 import { UsecaseTestCommand } from './command/uctest';
 import { PictCommand } from './command/pict';
@@ -17,9 +17,9 @@ program
   .command('usecase <file> [otherFiles...]')
   .description('generate use case description documents')
   .requiredOption('-o, --output <directory>', 'output directory')
-  .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
-    const output = options['output'];
-    const command = new UsecaseCommand(output);
+  .option('-v, --verbose', 'verbose mode')
+  .action((file: string, otherFiles: string[], option: ICommandOption): void => {
+    const command = new UsecaseCommand(option);
     executeCommand(file, otherFiles, command);
   });
 
@@ -27,9 +27,9 @@ program
   .command('uctest <file> [otherFiles...]')
   .description('generate uctest documents')
   .requiredOption('-o, --output <directory>', 'output directory')
-  .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
-    const output = options['output'];
-    const command = new UsecaseTestCommand(output);
+  .option('-v, --verbose', 'verbose mode')
+  .action((file: string, otherFiles: string[], option: ICommandOption): void => {
+    const command = new UsecaseTestCommand(option);
     executeCommand(file, otherFiles, command);
   });
 
@@ -37,9 +37,9 @@ program
   .command('pict <file> [otherFiles...]')
   .description('generate pict combination')
   .requiredOption('-o, --output <directory>', 'output directory')
-  .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
-    const output = options['output'];
-    const command = new PictCommand(output);
+  .option('-v, --verbose', 'verbose mode')
+  .action((file: string, otherFiles: string[], option: ICommandOption): void => {
+    const command = new PictCommand(option);
     executeCommand(file, otherFiles, command);
   });
 
@@ -47,9 +47,9 @@ program
   .command('decision <file> [otherFiles...]')
   .description('generate decision table')
   .requiredOption('-o, --output <directory>', 'output directory')
-  .action((file: string, otherFiles: string[], options: Record<string, string>): void => {
-    const output = options['output'];
-    const command = new DecisionHtmlCommand(output);
+  .option('-v, --verbose', 'verbose mode')
+  .action((file: string, otherFiles: string[], option: ICommandOption): void => {
+    const command = new DecisionHtmlCommand(option);
     executeCommand(file, otherFiles, command);
   });
 
@@ -61,11 +61,15 @@ function executeCommand(file: string, otherFiles: string[], specCmd: SpecCommand
     if (otherFiles) {
       files = [...files, ...otherFiles];
     }
-    const s = parse(files);
+    const s = parse(files, specCmd.option.verbose);
     specCmd.execute(s);
   } catch (e) {
     if (e instanceof Error) {
-      console.error(e.stack);
+      if (specCmd.option.verbose) {
+        console.error(e.stack);
+      } else {
+        console.error(e.message);
+      }
     } else {
       console.error(e);
     }

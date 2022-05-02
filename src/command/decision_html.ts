@@ -1,5 +1,5 @@
 import { App } from '../spec/app';
-import { SpecCommand } from './base';
+import { AbstractSpecCommand } from './base';
 import { UseCase } from '../spec/usecase';
 import { Valiation, DTConditionRuleChoice, DTResultRuleChoice, DecisionTable } from '../spec/valiation';
 import ejs from 'ejs';
@@ -83,9 +83,7 @@ class DTSection {
   }
 }
 
-export class DecisionHtmlCommand implements SpecCommand {
-  constructor(private output: string) {}
-
+export class DecisionHtmlCommand extends AbstractSpecCommand {
   public execute(spc: App): void {
     spc.usecases.forEach(uc => {
       for (const valiation of uc.valiations) {
@@ -291,7 +289,7 @@ export class DecisionHtmlCommand implements SpecCommand {
 %>
 `;
     const mdtext = ejs.render(template.trimStart(), { data: jsondata }, {});
-    const mdpath = path.join(this.output, `${prefix}.html`);
+    const mdpath = path.join(this.option.output, `${prefix}.html`);
     fs.writeFileSync(mdpath, mdtext);
   }
 }
