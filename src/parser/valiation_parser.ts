@@ -13,9 +13,9 @@ import {
   PictCombiFactory,
   Factor,
   FactorId,
-  FactorItem,
-  FactorItemChoice,
-  FactorItemChoiceCollection,
+  FactorLevel,
+  FactorLevelChoice,
+  FactorLevelChoiceCollection,
   FactorEntryPoint,
   EntryPoint,
   VerificationPoint,
@@ -97,8 +97,7 @@ export function parseValiations(
         factorEntryPoint,
         new PictConstraint(props.pictConstraint),
         pictCombi,
-        results,
-        strictValidation
+        results
       );
       const dt = DecisionTableFactory.getInstance(valiation);
       try {
@@ -131,14 +130,14 @@ function parseValiationResult(
   factorInValiation: Cache<Factor>
 ): ValiationResult {
   ctx.push(resultId);
-  const choices = new FactorItemChoiceCollection();
+  const choices = new FactorLevelChoiceCollection();
   for (const factor of factorInValiation.values()) {
     choices.addAll(factor);
   }
   ctx.push('arrow');
   let arrows;
   if (resultProps.arrow) {
-    arrows = parseFactorItemChoiceCollection(ctx, factorInValiation, resultProps.arrow);
+    arrows = parseFactorLevelChoiceCollection(ctx, factorInValiation, resultProps.arrow);
   } else {
     arrows = choices.copy();
   }
@@ -146,9 +145,9 @@ function parseValiationResult(
   ctx.push('disarrow');
   let disarrows;
   if (resultProps.disarrow) {
-    disarrows = parseFactorItemChoiceCollection(ctx, factorInValiation, resultProps.disarrow);
+    disarrows = parseFactorLevelChoiceCollection(ctx, factorInValiation, resultProps.disarrow);
   } else {
-    disarrows = new FactorItemChoiceCollection();
+    disarrows = new FactorLevelChoiceCollection();
   }
   ctx.pop('disarrow');
   const order = resultProps.order ? resultProps.order : 'arrow';
@@ -196,28 +195,28 @@ function parseValiationResult(
   return result;
 }
 
-function parseFactorItemChoiceCollection(
+function parseFactorLevelChoiceCollection(
   ctx: ParserContext,
   factorInValiation: Cache<Factor>,
   ad?: { [key: string]: string[] }
-): FactorItemChoiceCollection {
-  const adChoices = new FactorItemChoiceCollection();
+): FactorLevelChoiceCollection {
+  const adChoices = new FactorLevelChoiceCollection();
   if (!ad) {
     return adChoices;
   }
-  for (const [factorId, factorItems] of Object.entries(ad)) {
+  for (const [factorId, factorLevels] of Object.entries(ad)) {
     ctx.push(factorId);
     const factor = factorInValiation.get(factorId);
     if (!factor) {
       throw new ParseError(`${factorId} は factors の中で未定義です。`);
     }
-    for (const item of factorItems) {
+    for (const item of factorLevels) {
       ctx.push(item);
-      const itemObj = new FactorItem(item);
+      const itemObj = new FactorLevel(item);
       if (!factor.existsItem(itemObj)) {
         throw new ParseError(`${item} は factors/${factorId}/items の中で未定義です。`);
       }
-      const choice = new FactorItemChoice(factor, itemObj);
+      const choice = new FactorLevelChoice(factor, itemObj);
       adChoices.add(choice);
       ctx.pop(item);
     }

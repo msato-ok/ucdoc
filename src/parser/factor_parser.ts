@@ -1,5 +1,5 @@
 import { ParserContext, IAppProps } from './parser';
-import { Factor, FactorId, FactorItem } from '../spec/valiation';
+import { Factor, FactorId, FactorLevel } from '../spec/valiation';
 import { Name } from '../spec/core';
 
 export function parseFactor(ctx: ParserContext, data: IAppProps): Factor[] {
@@ -14,7 +14,7 @@ export function parseFactor(ctx: ParserContext, data: IAppProps): Factor[] {
     const items = [];
     for (const item of props.items) {
       ctx.push(item);
-      items.push(new FactorItem(item));
+      items.push(new FactorLevel(item));
       ctx.pop(item);
     }
     const o = new Factor(new FactorId(id), new Name(name), items);

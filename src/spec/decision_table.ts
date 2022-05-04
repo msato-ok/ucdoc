@@ -2,11 +2,11 @@ import { Description } from './core';
 import { ValidationError, InvalidArgumentError } from '../common';
 import {
   Factor,
-  FactorItem,
+  FactorLevel,
   EntryPoint,
   FactorEntryPoint,
-  FactorItemChoice,
-  FactorItemChoiceCollection,
+  FactorLevelChoice,
+  FactorLevelChoiceCollection,
   Valiation,
 } from './valiation';
 
@@ -22,7 +22,7 @@ export type DTConditionChoice = typeof DTConditionRuleChoice[keyof typeof DTCond
 export class DTConditionRow {
   private _choices: DTConditionChoice[] = [];
 
-  constructor(readonly factor: Factor, readonly item: FactorItem) {}
+  constructor(readonly factor: Factor, readonly item: FactorLevel) {}
 
   get countOfRules(): number {
     return this._choices.length;
@@ -107,15 +107,15 @@ export class DecisionTable {
     this._resultRows.push(row);
   }
 
-  getRuleConditions(ruleNo: number): FactorItemChoiceCollection {
+  getRuleConditions(ruleNo: number): FactorLevelChoiceCollection {
     if (this.countOfRules <= ruleNo) {
       throw new InvalidArgumentError('ruleNo は 0 から (countOfRules - 1) の範囲で指定してください');
     }
-    const vertMix = new FactorItemChoiceCollection();
+    const vertMix = new FactorLevelChoiceCollection();
     for (const conditionRow of this._conditionRows) {
       const yn = conditionRow.rules[ruleNo];
       if (yn == DTConditionRuleChoice.Yes) {
-        vertMix.add(new FactorItemChoice(conditionRow.factor, conditionRow.item));
+        vertMix.add(new FactorLevelChoice(conditionRow.factor, conditionRow.item));
       } else if (yn == DTConditionRuleChoice.None) {
         // skip
       } else {
@@ -179,12 +179,12 @@ export class DecisionTableFactory {
       if (!choiceItems) {
         throw new InvalidArgumentError();
       }
-      const uniqItems = new Set<FactorItem>();
+      const uniqItems = new Set<FactorLevel>();
       for (const item of choiceItems) {
         uniqItems.add(item);
       }
-      const sortedChoiceItems: FactorItem[] = [];
-      for (const item of factor.items) {
+      const sortedChoiceItems: FactorLevel[] = [];
+      for (const item of factor.levels) {
         if (uniqItems.has(item)) {
           sortedChoiceItems.push(item);
         }

@@ -15,7 +15,7 @@ export class Valiation extends Entity {
     readonly sourceFlows: Flow[],
     readonly factorEntryPoint: FactorEntryPoint,
     readonly pictConstraint: PictConstraint,
-    readonly pictCombination: Map<Factor, FactorItem[]>,
+    readonly pictCombination: Map<Factor, FactorLevel[]>,
     readonly results: ValiationResult[]
   ) {
     super(id);
@@ -52,7 +52,7 @@ export class ValiationResult extends Entity {
   constructor(
     readonly id: ValiationResultId,
     readonly desc: Description,
-    readonly choices: FactorItemChoiceCollection,
+    readonly choices: FactorLevelChoiceCollection,
     readonly verificationPoints: VerificationPoint[]
   ) {
     super(id);
@@ -62,15 +62,15 @@ export class ValiationResult extends Entity {
 export class FactorId extends UniqueId {}
 
 /**
- * 因子と水準
+ * 因子と因子水準
  */
 export class Factor extends Entity {
-  constructor(readonly id: FactorId, readonly name: Name, readonly items: FactorItem[]) {
+  constructor(readonly id: FactorId, readonly name: Name, readonly levels: FactorLevel[]) {
     super(id);
   }
 
-  existsItem(item: FactorItem): boolean {
-    for (const _item of this.items) {
+  existsItem(item: FactorLevel): boolean {
+    for (const _item of this.levels) {
       if (_item.equals(item)) {
         return true;
       }
@@ -80,9 +80,9 @@ export class Factor extends Entity {
 }
 
 /**
- * 因子の項目
+ * 因子水準の1つの値
  */
-export class FactorItem extends HasText implements ValueObject {
+export class FactorLevel extends HasText implements ValueObject {
   constructor(readonly text: string) {
     super(text);
   }
@@ -133,15 +133,16 @@ export class PictConstraint extends HasText implements ValueObject {
 }
 
 /**
- * 因子項目の選択状態
+ * 因子水準の選択状態
  */
-export class FactorItemChoice implements ValueObject {
-  constructor(readonly factor: Factor, readonly item: FactorItem) {}
-  equals(o: FactorItemChoice): boolean {
+export class FactorLevelChoice implements ValueObject {
+  constructor(readonly factor: Factor, readonly level: FactorLevel) {}
+
+  equals(o: FactorLevelChoice): boolean {
     if (!o.factor.equals(this.factor)) {
       return false;
     }
-    if (!o.item.equals(this.item)) {
+    if (!o.level.equals(this.level)) {
       return false;
     }
     return true;
@@ -149,17 +150,17 @@ export class FactorItemChoice implements ValueObject {
 }
 
 /**
- * 因子項目の選択の組合せ
+ * 因子水準の選択の組合せ
  */
-export class FactorItemChoiceCollection {
-  private _choices: FactorItemChoice[] = [];
+export class FactorLevelChoiceCollection {
+  private _choices: FactorLevelChoice[] = [];
 
-  get items(): FactorItemChoice[] {
+  get items(): FactorLevelChoice[] {
     return this._choices;
   }
 
-  copy(): FactorItemChoiceCollection {
-    const o = new FactorItemChoiceCollection();
+  copy(): FactorLevelChoiceCollection {
+    const o = new FactorLevelChoiceCollection();
     for (const choice of this._choices) {
       o.add(choice);
     }
@@ -167,20 +168,20 @@ export class FactorItemChoiceCollection {
   }
 
   addAll(factor: Factor) {
-    for (const item of factor.items) {
-      const choice = new FactorItemChoice(factor, item);
+    for (const level of factor.levels) {
+      const choice = new FactorLevelChoice(factor, level);
       this.add(choice);
     }
   }
 
-  add(choice: FactorItemChoice) {
+  add(choice: FactorLevelChoice) {
     if (this.contains(choice)) {
       return;
     }
     this._choices.push(choice);
   }
 
-  remove(target: FactorItemChoice) {
+  remove(target: FactorLevelChoice) {
     let i = 0;
     for (const choice of this._choices) {
       if (choice.equals(target)) {
@@ -191,7 +192,7 @@ export class FactorItemChoiceCollection {
     }
   }
 
-  contains(target: FactorItemChoice): boolean {
+  contains(target: FactorLevelChoice): boolean {
     for (const choice of this._choices) {
       if (choice.equals(target)) {
         return true;
@@ -200,7 +201,7 @@ export class FactorItemChoiceCollection {
     return false;
   }
 
-  containsAll(items: FactorItemChoice[]): boolean {
+  containsAll(items: FactorLevelChoice[]): boolean {
     for (const item of items) {
       if (!this.contains(item)) {
         return false;
@@ -209,7 +210,7 @@ export class FactorItemChoiceCollection {
     return true;
   }
 
-  arrow(arrowList: FactorItemChoiceCollection) {
+  arrow(arrowList: FactorLevelChoiceCollection) {
     for (const choice of this._choices) {
       if (!arrowList.contains(choice)) {
         this.remove(choice);
@@ -219,7 +220,7 @@ export class FactorItemChoiceCollection {
     }
   }
 
-  disarrow(disarrowList: FactorItemChoiceCollection) {
+  disarrow(disarrowList: FactorLevelChoiceCollection) {
     for (const choice of this._choices) {
       if (disarrowList.contains(choice)) {
         this.remove(choice);
@@ -236,15 +237,15 @@ export class PictCombiFactory {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   private constructor() {}
 
-  static getInstance(factors: Factor[]): Map<Factor, FactorItem[]> {
+  static getInstance(factors: Factor[]): Map<Factor, FactorLevel[]> {
     this._seq++;
     // pict には、文字列のエスケープルールがわからないので、
     // 置換文字に変換してパラメータファイルを作成する
     const inpRows = [];
     let factorNo = 0;
     for (const factor of factors) {
-      const itemIds = [...factor.items].map((_, i) => `i${i}`); //=> [ 0, 1, 2, 3, 4 ]
-      inpRows.push(`f${factorNo}: ${itemIds.join(', ')}\n`);
+      const levelIds = [...factor.levels].map((_, i) => `i${i}`); //=> [ 0, 1, 2, 3, 4 ]
+      inpRows.push(`f${factorNo}: ${levelIds.join(', ')}\n`);
       factorNo++;
     }
     const pictInText = inpRows.join('');
@@ -258,7 +259,7 @@ export class PictCombiFactory {
     const pictOutText = execSync(`pict ${pictInPath}`);
     const outRows = pictOutText.toString().split(/\n/);
     let head = true;
-    const pictCombi = new Map<Factor, FactorItem[]>();
+    const pictCombi = new Map<Factor, FactorLevel[]>();
     for (const row of outRows) {
       if (row == '') {
         continue;
@@ -283,13 +284,13 @@ export class PictCombiFactory {
         const factor = factors[factorNo];
         if (col.indexOf('i') == 0) {
           const itemNo = Number(col.substring(1));
-          const item = factor.items[itemNo];
-          let items = pictCombi.get(factor);
-          if (!items) {
-            items = [];
-            pictCombi.set(factor, items);
+          const level = factor.levels[itemNo];
+          let levels = pictCombi.get(factor);
+          if (!levels) {
+            levels = [];
+            pictCombi.set(factor, levels);
           }
-          items.push(item);
+          levels.push(level);
         } else {
           throw new Error('not implement');
         }
