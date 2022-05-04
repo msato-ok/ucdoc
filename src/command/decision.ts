@@ -1,7 +1,8 @@
 import { App } from '../spec/app';
 import { AbstractSpecCommand } from './base';
 import { UseCase } from '../spec/usecase';
-import { Valiation, DTConditionRuleChoice, DTResultRuleChoice } from '../spec/valiation';
+import { Valiation } from '../spec/valiation';
+import { DTConditionRuleChoice, DTResultRuleChoice, DecisionTableFactory } from '../spec/decision_table';
 import fs from 'fs';
 import path from 'path';
 
@@ -20,7 +21,7 @@ export class DecisionCommand extends AbstractSpecCommand {
 
   private writeDecisionTable(valiation: Valiation, uc: UseCase) {
     const lines = [];
-    const dTable = valiation.decisionTable;
+    const dTable = DecisionTableFactory.getInstance(valiation);
     const head = [' ', ' ', ' '];
     for (let i = 0; i < dTable.countOfRules; i++) {
       head.push(`${i + 1}`);

@@ -15,7 +15,7 @@ import {
   BranchType,
 } from '../spec/uc_scenario';
 import { AlternateFlow, ExceptionFlow } from '../spec/flow';
-import { DTConditionRuleChoice } from '../spec/valiation';
+import { DTConditionRuleChoice } from '../spec/decision_table';
 
 // ■ html属性に関する注意
 //
@@ -168,9 +168,10 @@ function genScenarioDTables(ucAllScenario: UcScenarioCollection, uc: UseCase): I
           factor_select_rules: Array(ucDt.countOfRules).fill(' '),
         } as IStep;
         if (step.conditionRow) {
-          stepJson.factor_desc = step.conditionRow.factor.name.text;
-          stepJson.factor_select_item = step.conditionRow.item.text;
-          stepJson.factor_select_rules = step.conditionRow.rules.map(x =>
+          const conditionRow = step.conditionRow;
+          stepJson.factor_desc = conditionRow.factor.name.text;
+          stepJson.factor_select_item = conditionRow.item.text;
+          stepJson.factor_select_rules = conditionRow.rules.map(x =>
             x == DTConditionRuleChoice.Yes ? 'Y' : x == DTConditionRuleChoice.No ? 'N' : ' '
           );
         }

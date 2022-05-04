@@ -1,7 +1,8 @@
 import { App } from '../spec/app';
 import { AbstractSpecCommand } from './base';
 import { UseCase } from '../spec/usecase';
-import { Valiation, DTConditionRuleChoice, DTResultRuleChoice, DecisionTable } from '../spec/valiation';
+import { Valiation } from '../spec/valiation';
+import { DTConditionRuleChoice, DTResultRuleChoice, DecisionTable, DecisionTableFactory } from '../spec/decision_table';
 import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
@@ -94,7 +95,7 @@ export class DecisionHtmlCommand extends AbstractSpecCommand {
   }
 
   private assembleData(valiation: Valiation, uc: UseCase): string {
-    const dt = valiation.decisionTable;
+    const dt = DecisionTableFactory.getInstance(valiation);
     const dtSection = new DTSection(dt);
     function vueTableItem(items: Record<string, any>[]) {
       const data: Record<string, any>[] = [];

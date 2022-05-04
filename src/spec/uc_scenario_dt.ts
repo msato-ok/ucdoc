@@ -1,6 +1,7 @@
 import { UniqueId, Entity } from './core';
 import { PreCondition } from './prepostcondition';
-import { Valiation, EntryPoint, DTConditionRow, DecisionTable } from './valiation';
+import { Valiation, EntryPoint } from './valiation';
+import { DTConditionRow, DecisionTable, DecisionTableFactory } from './decision_table';
 import { UcScenario } from './uc_scenario';
 import { Flow } from './flow';
 import { InvalidArgumentError } from '../common';
@@ -85,7 +86,7 @@ export class UcScenarioDecisionTableFactory {
     valiation: Valiation,
     preConditions: PreCondition[]
   ): UcScenarioDecisionTable {
-    const dt = valiation.decisionTable;
+    const dt = DecisionTableFactory.getInstance(valiation);
     const ucDt = new UcScenarioDecisionTable(dt);
     for (const preCondition of preConditions) {
       const conditionRows = dt.getRuleConditionsByEntryPoint(preCondition);

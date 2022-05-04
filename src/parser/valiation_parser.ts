@@ -20,6 +20,7 @@ import {
   EntryPoint,
   VerificationPoint,
 } from '../spec/valiation';
+import { DecisionTableFactory } from '../spec/decision_table';
 
 export function parseValiations(
   ctx: ParserContext,
@@ -99,13 +100,18 @@ export function parseValiations(
         results,
         strictValidation
       );
-      if (!strictValidation && valiation.invalidRules.length > 0) {
-        const errmsg = [
-          `${valiation.invalidRules.map(x => `  - ${x}`).join('\n')}`,
-          '  ※ ruleNoはデシジョンテーブルのmdを作成して確認してください。',
-          '  usage: ucdoc decision <file> [otherFiles...]',
-        ].join('\n');
-        console.warn(`WARN: ${ctx.pathText}:\n${errmsg}`);
+      const dt = DecisionTableFactory.getInstance(valiation);
+      try {
+        dt.validate();
+      } catch (e) {
+        if (!strictValidation && dt.invalidRules.length > 0) {
+          const errmsg = [
+            `${dt.invalidRules.map(x => `  - ${x}`).join('\n')}`,
+            '  ※ ruleNoはデシジョンテーブルのmdを作成して確認してください。',
+            '  usage: ucdoc decision <file> [otherFiles...]',
+          ].join('\n');
+          console.warn(`WARN: ${ctx.pathText}:\n${errmsg}`);
+        }
       }
       valiations.push(valiation);
       ctx.pop(id);
