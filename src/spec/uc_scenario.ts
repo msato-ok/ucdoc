@@ -1,6 +1,6 @@
-import { UniqueId, Description, Entity, entityContains } from './core';
+import { UniqueId, Description, Entity } from './core';
 import { UseCase } from './usecase';
-import { Flow, FlowCollection, AbstractAltExFlow, AlternateFlow, ExceptionFlow } from './flow';
+import { Flow, FlowCollection, AlternateFlow, ExceptionFlow } from './flow';
 import * as util from '../util';
 import { InvalidArgumentError } from '../common';
 

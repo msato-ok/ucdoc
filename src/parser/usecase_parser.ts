@@ -6,7 +6,7 @@ import { Factor } from '../spec/valiation';
 import { UseCase, UseCaseId } from '../spec/usecase';
 import { Description, Name, Summary } from '../spec/core';
 import { PreCondition, PostCondition, PrePostCondition, PrePostConditionId } from '../spec/prepostcondition';
-import { Flow, AltExFlowCollection, AlternateFlow, ExceptionFlow, FlowCollection } from '../spec/flow';
+import { AltExFlowCollection, AlternateFlow, ExceptionFlow } from '../spec/flow';
 import { Valiation } from '../spec/valiation';
 import { parseBasicFlows, parseAlternateFlows, parseExceptionFlows } from './flow_parser';
 import { parseValiations } from './valiation_parser';

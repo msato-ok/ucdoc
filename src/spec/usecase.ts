@@ -1,9 +1,9 @@
 import { ValidationError } from '../common';
-import { UniqueId, Entity, Name, Summary, implementsHasTestCover, implementsHasChildNode } from './core';
+import { UniqueId, Entity, Name, Summary, implementsHasTestCover } from './core';
 import { Cache } from './cache';
 import { Actor } from './actor';
 import { AltExFlowCollection, AlternateFlow, ExceptionFlow, FlowCollection, Flow } from './flow';
-import { PreCondition, PostCondition, PrePostCondition } from './prepostcondition';
+import { PreCondition, PostCondition } from './prepostcondition';
 import { Glossary, GlossaryCollection } from './glossary';
 import { Valiation } from './valiation';
 import { getNestedObjects } from '../spec/core';

@@ -6,7 +6,7 @@ import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
 import { UseCase } from '../spec/usecase';
-import { UcScenarioDecisionTable, UcScenarioDecisionTableFactory } from '../spec/ucstep';
+import { UcScenarioDecisionTableFactory } from '../spec/uc_scenario_dt';
 import {
   UcScenarioCollectionFactory,
   UcScenarioCollection,
@@ -15,7 +15,7 @@ import {
   BranchType,
 } from '../spec/uc_scenario';
 import { AlternateFlow, ExceptionFlow } from '../spec/flow';
-import { Valiation, DTConditionRuleChoice, DTResultRuleChoice, DecisionTable } from '../spec/valiation';
+import { DTConditionRuleChoice } from '../spec/valiation';
 
 // ■ html属性に関する注意
 //

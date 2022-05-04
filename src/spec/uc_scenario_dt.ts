@@ -1,18 +1,8 @@
-import { UniqueId, Description, Entity, entityContains } from './core';
-import { UseCase } from './usecase';
+import { UniqueId, Entity } from './core';
 import { PreCondition } from './prepostcondition';
-import {
-  Factor,
-  FactorItem,
-  FactorItemChoice,
-  Valiation,
-  EntryPoint,
-  DTConditionRow,
-  DecisionTable,
-} from './valiation';
-import { UcScenario, UcScenarioType } from './uc_scenario';
-import { Flow, FlowCollection, AbstractAltExFlow, AlternateFlow, ExceptionFlow } from './flow';
-import * as util from '../util';
+import { Valiation, EntryPoint, DTConditionRow, DecisionTable } from './valiation';
+import { UcScenario } from './uc_scenario';
+import { Flow } from './flow';
 import { InvalidArgumentError } from '../common';
 
 export class UcScenarioStepId extends UniqueId {
