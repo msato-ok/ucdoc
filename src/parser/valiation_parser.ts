@@ -101,11 +101,11 @@ export function parseValiations(
       );
       if (!strictValidation && valiation.invalidRules.length > 0) {
         const errmsg = [
-          `${valiation.invalidRules.join('\n')}`,
-          '※ ruleNoはデシジョンテーブルのmdを作成して確認してください。',
-          'usage: ucdoc decision <file> [otherFiles...]',
+          `${valiation.invalidRules.map(x => `  - ${x}`).join('\n')}`,
+          '  ※ ruleNoはデシジョンテーブルのmdを作成して確認してください。',
+          '  usage: ucdoc decision <file> [otherFiles...]',
         ].join('\n');
-        console.warn(`WARN: ${ctx.pathText}: ${errmsg}`);
+        console.warn(`WARN: ${ctx.pathText}:\n${errmsg}`);
       }
       valiations.push(valiation);
       ctx.pop(id);
@@ -180,14 +180,14 @@ function parseValiationResult(
     verificationPoints.push(verificationPoint);
   }
   ctx.pop('verificationPointIds');
-  const results = new ValiationResult(
+  const result = new ValiationResult(
     new ValiationResultId(resultId),
     new Description(resultProps.desc),
     choices,
     verificationPoints
   );
   ctx.pop(resultId);
-  return results;
+  return result;
 }
 
 function parseFactorItemChoiceCollection(

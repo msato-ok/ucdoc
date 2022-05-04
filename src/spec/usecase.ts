@@ -1,11 +1,12 @@
 import { ValidationError } from '../common';
-import { UniqueId, Entity, Name, Summary, implementsHasTestCover } from './core';
+import { UniqueId, Entity, Name, Summary, implementsHasTestCover, implementsHasChildNode } from './core';
 import { Cache } from './cache';
 import { Actor } from './actor';
 import { AltExFlowCollection, AlternateFlow, ExceptionFlow, FlowCollection, Flow } from './flow';
 import { PreCondition, PostCondition, PrePostCondition } from './prepostcondition';
 import { Glossary, GlossaryCollection } from './glossary';
 import { Valiation } from './valiation';
+import { getNestedObjects } from '../spec/core';
 
 export class UseCaseValidationError extends ValidationError {}
 
@@ -119,8 +120,8 @@ export class UseCase extends Entity {
         uniqueIds.add(entity.id.text);
       }
     }
-    validateEntityId(PrePostCondition.getNestedObjects(this.preConditions));
-    validateEntityId(PrePostCondition.getNestedObjects(this.postConditions));
+    validateEntityId(getNestedObjects<PreCondition>(this.preConditions));
+    validateEntityId(getNestedObjects<PostCondition>(this.postConditions));
     validateEntityId(this.basicFlows.items);
     validateEntityId(this.exceptionFlows.items);
     validateEntityId(this.valiations);
@@ -145,7 +146,7 @@ export class UseCase extends Entity {
     const errMessages = [];
     for (const o of this.postConditions) {
       if (!o.isTestCover) {
-        errMessages.push(`valiations の中に事後条件 ${o.id.text} の検証ルールがありません。`);
+        errMessages.push(`valiations の中に事後条件 ${o.uncoverIds} の検証ルールがありません。`);
       }
     }
     for (const o of this.alternateFlows.items) {

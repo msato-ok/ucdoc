@@ -13,16 +13,16 @@ usecases:
 
     # 事前条件
     preConditions:
-      R01: 会員登録が済んでいる
-      R02: 蔵書が登録されている
+      R01: ${会員} が登録されている
+      R02: ${蔵書} が登録されている
 
     # 事後条件
     postConditions:
       P01:
-        description: 貸出予約がされている
+        description: ${蔵書} の貸出が予約されている
         details:
-          P0101: 貸出予約が登録されている
-          P0102: 在庫が確保されている
+          P0101: ${貸出予約} が登録されている
+          P0102: ${在庫} の引当がされている
           P0103: ${登録完了メール} が送信される
 
     # 基本フロー
@@ -74,6 +74,7 @@ usecases:
 
     valiations:
       V01:
+        description: 基本フローの検証パターン
         factorEntryPoints:
           R01:
             factors:
@@ -87,8 +88,33 @@ usecases:
           VR0101:
             desc: 会員が有効なときは貸出予約可能
             arrow: { 会員登録状態: [登録済] }
-            verificationPointIds: [P01]
+            verificationPointIds: [P0101,P0102,P0103]
           VR0102:
+            desc: 検索マッチしないときの代替フロー
+            arrow: { 蔵書検索での検索条件: [マッチする蔵書がない] }
+            verificationPointIds: [A01]
+          VR0103:
             desc: 会員が無効化したときにエラーになる
             arrow: { 会員登録状態: [登録抹消] }
             verificationPointIds: [E01]
+
+      # V02:
+      #   description: 代替フローの検証パターン
+      #   factorEntryPoints:
+      #     R01:
+      #       factors:
+      #         - 会員登録状態
+      #     B01:
+      #       factors:
+      #         - 蔵書検索での検索条件
+      #   pictConstraint: |
+
+      #   results:
+      #     VR0201:
+      #       desc: 会員が有効なときは貸出予約可能
+      #       arrow: { 会員登録状態: [登録済] }
+      #       verificationPointIds: [P01]
+      #     # VR0202:
+      #     #   desc: 会員が無効化したときにエラーになる
+      #     #   arrow: { 会員登録状態: [登録抹消] }
+      #     #   verificationPointIds: [E01]

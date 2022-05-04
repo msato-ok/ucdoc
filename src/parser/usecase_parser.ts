@@ -10,6 +10,7 @@ import { Flow, AltExFlowCollection, AlternateFlow, ExceptionFlow, FlowCollection
 import { Valiation } from '../spec/valiation';
 import { parseBasicFlows, parseAlternateFlows, parseExceptionFlows } from './flow_parser';
 import { parseValiations } from './valiation_parser';
+import { getNestedObjects } from '../spec/core';
 
 export function parseUsecase(
   ctx: ParserContext,
@@ -31,13 +32,13 @@ export function parseUsecase(
     ctx.push('preConditions');
     const preConditions: PreCondition[] = parsePrePostCondition(PreCondition, ctx, props.preConditions);
     const preConditionDic = new Cache<PreCondition>();
-    preConditionDic.addAll(PrePostCondition.getNestedObjects(preConditions));
+    preConditionDic.addAll(getNestedObjects<PreCondition>(preConditions));
     ctx.pop('preConditions');
 
     ctx.push('postConditions');
     const postConditions: PostCondition[] = parsePrePostCondition(PostCondition, ctx, props.postConditions);
     const postConditionDic = new Cache<PostCondition>();
-    postConditionDic.addAll(<PostCondition[]>PrePostCondition.getNestedObjects(postConditions));
+    postConditionDic.addAll(getNestedObjects<PostCondition>(postConditions));
     ctx.pop('postConditions');
 
     ctx.push('basicFlows');
@@ -93,7 +94,7 @@ export function parseUsecase(
       strictValidation
     );
     if (!strictValidation && usecase.hasError) {
-      console.warn(`WARN: ${ctx.pathText}: ${usecase.errors.join('\n')}`);
+      console.warn(`WARN: ${ctx.pathText}: \n${usecase.errors.map(x => `  - ${x}`).join('\n')}`);
     }
 
     usecases.push(usecase);
@@ -124,7 +125,7 @@ function parsePrePostCondition<T extends PrePostCondition>(
     const cond = new ctor(new PrePostConditionId(id), new Description(desc));
     if (props.details) {
       ctx.push('details');
-      const details = parsePrePostCondition(PreCondition, ctx, props.details);
+      const details = parsePrePostCondition(ctor, ctx, props.details);
       for (const detail of details) {
         cond.addDetail(detail);
       }

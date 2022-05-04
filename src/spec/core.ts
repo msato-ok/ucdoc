@@ -60,6 +60,24 @@ export function implementsHasTestCover(arg: any): arg is HasTestCover {
   return arg !== null && typeof arg === 'object' && typeof arg.isTestCover === 'boolean';
 }
 
+export interface HasChildNode<T> {
+  get childNodes(): T[];
+}
+
+export function implementsHasChildNode<T>(arg: any): arg is HasChildNode<T> {
+  return arg !== null && typeof arg === 'object' && typeof arg.childNodes === 'boolean';
+}
+
+export function getNestedObjects<T extends HasChildNode<T>>(objs: T[]): T[] {
+  let results: T[] = [];
+  for (const o of objs) {
+    results.push(o);
+    const children = getNestedObjects(o.childNodes);
+    results = results.concat(children);
+  }
+  return results;
+}
+
 type WalkCallback = (obj: Record<string, unknown>, path: string[], name: string, val: unknown) => void;
 
 export function walkProps(obj: Record<string, unknown>, path: string[], callback: WalkCallback) {

@@ -1,13 +1,13 @@
-import { UniqueId, Entity, Description, HasTestCover } from './core';
+import { UniqueId, Entity, Description, HasTestCover, HasChildNode } from './core';
 
-export class PrePostCondition extends Entity {
+export class PrePostCondition extends Entity implements HasChildNode<PrePostCondition> {
   protected _details: PrePostCondition[] = [];
 
   constructor(readonly id: UniqueId, readonly description: Description) {
     super(id);
   }
 
-  get details(): PrePostCondition[] {
+  get childNodes(): PrePostCondition[] {
     return this._details;
   }
 
@@ -15,15 +15,15 @@ export class PrePostCondition extends Entity {
     this._details.push(detail);
   }
 
-  static getNestedObjects(objs: PrePostCondition[]): PrePostCondition[] {
-    let results: PrePostCondition[] = [];
-    for (const o of objs) {
-      results.push(o);
-      const children = this.getNestedObjects(o.details);
-      results = results.concat(children);
-    }
-    return results;
-  }
+  // static getNestedObjects(objs: PrePostCondition[]): PrePostCondition[] {
+  //   let results: PrePostCondition[] = [];
+  //   for (const o of objs) {
+  //     results.push(o);
+  //     const children = this.getNestedObjects(o.childNodes);
+  //     results = results.concat(children);
+  //   }
+  //   return results;
+  // }
 }
 
 export class PrePostConditionId extends UniqueId {}
@@ -34,14 +34,14 @@ export class PreCondition extends PrePostCondition {
   }
 }
 
-export class PostCondition extends PrePostCondition implements HasTestCover {
+export class PostCondition extends PrePostCondition implements HasTestCover, HasChildNode<PostCondition> {
   private _testCover = false;
 
   constructor(readonly id: PrePostConditionId, readonly description: Description) {
     super(id, description);
   }
 
-  get details(): PostCondition[] {
+  get childNodes(): PostCondition[] {
     return <PostCondition[]>this._details;
   }
 
@@ -51,15 +51,23 @@ export class PostCondition extends PrePostCondition implements HasTestCover {
    * 当該事後条件はカバーされていると判定する。
    */
   get isTestCover(): boolean {
-    for (const detail of this.details) {
+    return this.uncoverIds.length === 0;
+  }
+
+  get uncoverIds(): string[] {
+    const ids = [];
+    for (const detail of this.childNodes) {
       if (!detail.isTestCover) {
-        return false;
+        ids.push(detail.id.text);
       }
     }
-    if (this.details.length > 0) {
-      return true;
+    if (ids.length === 0) {
+      return ids;
     }
-    return this._testCover;
+    if (!this._testCover) {
+      ids.push(this.id.text);
+    }
+    return ids;
   }
 
   set testCover(cover: boolean) {

@@ -6,6 +6,7 @@ import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
 import { UseCase } from '../spec/usecase';
+import { UcScenarioDecisionTable, UcScenarioDecisionTableFactory } from '../spec/ucstep';
 import {
   UcScenarioCollectionFactory,
   UcScenarioCollection,
@@ -14,6 +15,7 @@ import {
   BranchType,
 } from '../spec/uc_scenario';
 import { AlternateFlow, ExceptionFlow } from '../spec/flow';
+import { Valiation, DTConditionRuleChoice, DTResultRuleChoice, DecisionTable } from '../spec/valiation';
 
 // ■ html属性に関する注意
 //
@@ -63,41 +65,132 @@ interface IScenarioFlow {
   branch_type: string;
 }
 
-/*
+interface IScenarioDTable {
+  scenario_id: string;
+  countOfRules: number;
+  items: IStep[];
+}
+
 interface IStep {
+  step_id: string;
+  operation_desc: string;
+  factor_desc: string;
+  factor_select_item: string;
+  factor_select_rules: string[];
 }
 
-class StepSection {
-  private _steps: IStep[];
+class ScenarioFlowSection {
+  private _scenarioFlows: IScenarioFlow[] = [];
 
-  constructor() {
-    this._steps = <IStep[]>[];
+  get scenarioFlows(): IScenarioFlow[] {
+    return this._scenarioFlows;
   }
 
-  get items(): IStep[] {
-    return this._steps;
+  constructor(private ucAllScenario: UcScenarioCollection, private uc: UseCase) {
+    this.init();
   }
-        {
-          scenario_id: "TP01",
-          scenario_name: "基本フロー",
-          scenario_detail: "正常に実行されて事後条件が成立する状態",
-          step_rows: [
-            {
-              check_point_id: "B01",
-              operation: "[加盟店登録内容確認(画面)][] にアクセスする",
-              factor: "",
-              factor_item: "",
-            } as IStepRow,
-            {
-              check_point_id: "B02",
-              operation: "審査の申込状況を確認するために [審査案件取得API][] を実行する",
-              factor: "",
-              factor_item: "",
-            } as IStepRow,
-          ],
-        } as IStep, {
+
+  private scenarioColums(flowOnScenarios: UcScenario[]): string[] {
+    const cols = [];
+    for (const horzScenario of this.ucAllScenario.scenarios) {
+      if (entityContains(flowOnScenarios, horzScenario)) {
+        cols.push('○');
+      } else {
+        cols.push(' ');
+      }
+    }
+    return cols;
+  }
+
+  private init() {
+    let branchFlow: AlternateFlow | ExceptionFlow | undefined = undefined;
+    for (const flow of this.ucAllScenario.flows) {
+      let tooltips = '';
+      const branchType = this.ucAllScenario.getBranchType(flow);
+      if (branchType == BranchType.Branch) {
+        tooltips = '基本フローの分岐点';
+      } else if (branchType == BranchType.Alternate) {
+        const parent = this.uc.getAltExFlowByChildFlow(flow);
+        if (!parent) {
+          throw new InvalidArgumentError('BranchType.Alternate で代替フローの親を持たないフローはバグ');
+        }
+        if (branchFlow != parent) {
+          tooltips = `代替フロー${parent.id.text}に分岐（${parent.description.text}）`;
+          branchFlow = parent;
+        }
+      } else if (branchType == BranchType.Exception) {
+        const parent = this.uc.getAltExFlowByChildFlow(flow);
+        if (!parent) {
+          throw new InvalidArgumentError('BranchType.Exception で例外フローの親を持たないフローはバグ');
+        }
+        if (branchFlow != parent) {
+          tooltips = `例外フロー${parent.id.text}に分岐（${parent.description.text}）`;
+          branchFlow = parent;
+        }
+      } else if (branchType == BranchType.None) {
+        tooltips = '';
+      } else {
+        throw new InvalidArgumentError(`unknown branchType: ${branchType}`);
+      }
+      this._scenarioFlows.push({
+        flow_id: flow.id.text,
+        on_scenario: this.scenarioColums(this.ucAllScenario.getScenariosByFLow(flow)),
+        player_id: flow.player.id.text,
+        desc: flow.description.text,
+        tooltips: tooltips,
+        branch_type: branchType,
+      });
+    }
+  }
 }
-*/
+
+function genScenarioDTables(ucAllScenario: UcScenarioCollection, uc: UseCase): IScenarioDTable[] {
+  const ucDtJsons: IScenarioDTable[] = [];
+  for (const ucScenario of ucAllScenario.scenarios) {
+    for (const valiation of uc.valiations) {
+      const ucDt = UcScenarioDecisionTableFactory.getInstance(ucScenario, valiation, uc.preConditions);
+      const ucDtJson = {
+        scenario_id: ucScenario.id.text,
+        countOfRules: ucDt.countOfRules,
+        items: [],
+      } as IScenarioDTable;
+      const prevJson = {
+        operation_desc: '',
+        factor_desc: '',
+        factor_select_item: '',
+      };
+      for (const step of ucDt.steps) {
+        const stepJson = {
+          step_id: step.id.text,
+          operation_desc: step.entryPoint.description.text,
+          factor_desc: '',
+          factor_select_item: '',
+          factor_select_rules: Array(ucDt.countOfRules).fill(' '),
+        } as IStep;
+        if (step.conditionRow) {
+          stepJson.factor_desc = step.conditionRow.factor.name.text;
+          stepJson.factor_select_item = step.conditionRow.item.text;
+          stepJson.factor_select_rules = step.conditionRow.rules.map(x =>
+            x == DTConditionRuleChoice.Yes ? 'Y' : x == DTConditionRuleChoice.No ? 'N' : ' '
+          );
+        }
+        if (prevJson.operation_desc == stepJson.operation_desc) {
+          stepJson.operation_desc = '';
+        } else {
+          prevJson.operation_desc = stepJson.operation_desc;
+        }
+        if (prevJson.factor_desc == stepJson.factor_desc) {
+          stepJson.factor_desc = '';
+        } else {
+          prevJson.factor_desc = stepJson.factor_desc;
+        }
+        ucDtJson.items.push(stepJson);
+      }
+      ucDtJsons.push(ucDtJson);
+    }
+  }
+  return ucDtJsons;
+}
 
 export class UsecaseTestCommand extends AbstractSpecCommand {
   public execute(app: App): void {
@@ -146,57 +239,10 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
         desc: o.description.text,
       });
     }
-    function scenarioColums(flowOnScenarios: UcScenario[]): string[] {
-      const cols = [];
-      for (const horzScenario of ucAllScenario.scenarios) {
-        if (entityContains(flowOnScenarios, horzScenario)) {
-          cols.push('○');
-        } else {
-          cols.push(' ');
-        }
-      }
-      return cols;
-    }
     const scenarioIds = ucAllScenario.scenarios.map(x => x.id.text);
-    const scenarioFlows: IScenarioFlow[] = [];
-    let branchFlow: AlternateFlow | ExceptionFlow | undefined = undefined;
-    for (const flow of ucAllScenario.flows) {
-      let tooltips = '';
-      const branchType = ucAllScenario.getBranchType(flow);
-      if (branchType == BranchType.Branch) {
-        tooltips = '基本フローの分岐点';
-      } else if (branchType == BranchType.Alternate) {
-        const parent = uc.getAltExFlowByChildFlow(flow);
-        if (!parent) {
-          throw new InvalidArgumentError('BranchType.Alternate で代替フローの親を持たないフローはバグ');
-        }
-        if (branchFlow != parent) {
-          tooltips = `代替フロー${parent.id.text}に分岐（${parent.description.text}）`;
-          branchFlow = parent;
-        }
-      } else if (branchType == BranchType.Exception) {
-        const parent = uc.getAltExFlowByChildFlow(flow);
-        if (!parent) {
-          throw new InvalidArgumentError('BranchType.Exception で例外フローの親を持たないフローはバグ');
-        }
-        if (branchFlow != parent) {
-          tooltips = `例外フロー${parent.id.text}に分岐（${parent.description.text}）`;
-          branchFlow = parent;
-        }
-      } else if (branchType == BranchType.None) {
-        tooltips = '';
-      } else {
-        throw new InvalidArgumentError(`unknown branchType: ${branchType}`);
-      }
-      scenarioFlows.push({
-        flow_id: flow.id.text,
-        on_scenario: scenarioColums(ucAllScenario.getScenariosByFLow(flow)),
-        player_id: flow.player.id.text,
-        desc: flow.description.text,
-        tooltips: tooltips,
-        branch_type: branchType,
-      });
-    }
+    const scenarioFlowSection = new ScenarioFlowSection(ucAllScenario, uc);
+    const scenarioFlows: IScenarioFlow[] = scenarioFlowSection.scenarioFlows;
+    const scenarioDts = genScenarioDTables(ucAllScenario, uc);
     // v-data-table のデータは、headers に無くて、items にだけあるプロパティは、
     // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
     // ヘッダー構成に出力しないようにする。
@@ -247,47 +293,7 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
       },
       scenario_ids: scenarioIds,
       scenario_flows: scenarioFlows,
-      steps: [
-        /*
-        {
-          scenario_id: "TP01",
-          scenario_name: "基本フロー",
-          scenario_detail: "正常に実行されて事後条件が成立する状態",
-          step_rows: [
-            {
-              check_point_id: "B01",
-              operation: "[加盟店登録内容確認(画面)][] にアクセスする",
-              factor: "",
-              factor_item: "",
-            } as IStepRow,
-            {
-              check_point_id: "B02",
-              operation: "審査の申込状況を確認するために [審査案件取得API][] を実行する",
-              factor: "",
-              factor_item: "",
-            } as IStepRow,
-          ],
-        } as IStep, {
-          scenario_id: "TP02",
-          scenario_name: "代替フロー(A01)",
-          scenario_detail: "審査案件は申込処理中の状態で存在し、処理開始から5分以上経過",
-          step_rows: [
-            {
-              check_point_id: "B01",
-              operation: "[加盟店登録内容確認(画面)][] にアクセスする",
-              factor: "",
-              factor_item: "",
-            } as IStepRow,
-            {
-              check_point_id: "B02",
-              operation: "審査の申込状況を確認するために [審査案件取得API][] を実行する",
-              factor: "",
-              factor_item: "",
-            } as IStepRow,
-          ],
-        } as IStep,
-*/
-      ],
+      scenario_dtables: scenarioDts,
       uc: uc,
     });
   }
@@ -335,16 +341,15 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
             <v-toolbar-title>ユースケーステスト</v-toolbar-title>
           </v-toolbar>
         </v-row>
-        <v-row v-for="step in app.steps" :key="rowIndex">
+        <v-row v-for="scenario_dt in app.scenario_dtables" :key="rowIndex">
           <v-col cols="12">
             <v-card>
               <v-card-text>テスト手順</v-card-subtitle>
               <v-card-title class="text-h6">
-                {{ step.scenario_id }} {{ step.scenario_name }}
               </v-card-title>
-              <v-card-subtitle>{{ step.scenario_detail }}</v-card-subtitle>
+              <v-card-subtitle></v-card-subtitle>
               <v-card-text>
-                <v-data-table dense :items="step.step_rows" :disable-sort="true"
+                <v-data-table dense :items="scenario_dt.items" :disable-sort="true" class="app-vert-stripes" fixed-header
                   disable-pagination hide-default-footer>
 
                   <template v-slot:header>
@@ -353,18 +358,42 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
                         <th>ID</th>
                         <th>操作</th>
                         <th>因子</th>
-                        <th>選択肢</th>
+                        <th>水準</th>
+                        <th class="app-rule" :class="[
+                          ruleNo%2==1 ? 'app-odd': 'app-even',
+                          ruleNo == (selectedRuleIndex+1) ? 'app-rule-selected': '',
+                        ]" v-for="ruleNo of scenario_dt.countOfRules">{{ ruleNo }}</th>
                       </tr>
                     </thead>
                   </template>
 
-                  <template v-slot:body="{ step_rows }">
+                  <template v-slot:body="{ items }">
                     <tbody>
-                      <tr v-for="(row, rowIndex) in step_rows" :key="rowIndex">
-                        <td>{{ row.check_point_id }}</td>
-                        <td>{{ row.operation }}</td>
-                        <td>{{ row.factor }}</td>
-                        <td>{{ row.factor_item }}</td>
+                      <tr v-for="(item, rowIndex) in items" :key="rowIndex">
+                        <td>{{ item.step_id }}</td>
+                        <td>{{ item.operation_desc }}</td>
+                        <td>{{ item.factor_desc }}</td>
+                        <td>{{ item.factor_select_item }}</td>
+                        <td
+                          class="app-rule"
+                          :class="[
+                            i%2==0 ? 'app-odd': 'app-even',
+                            i == selectedRuleIndex ? 'app-rule-selected': '',
+                          ]"
+                          v-for="(choice, i) in item.factor_select_rules"
+                          v-on:mouseover="onRule(i, rowIndex)"
+                          v-on:mouseleave="onRule(-1, rowIndex)"
+                          >{{ choice }}</td>
+                      </tr>
+                      <tr>
+                        <th>ID</th>
+                        <th>操作</th>
+                        <th>因子</th>
+                        <th>選択肢</th>
+                        <th class="app-rule" :class="[
+                          ruleNo%2==1 ? 'app-odd': 'app-even',
+                          ruleNo == (selectedRuleIndex+1) ? 'app-rule-selected': '',
+                        ]" v-for="ruleNo of app.countOfStepRules">{{ ruleNo }}</th>
                       </tr>
                     </tbody>
                   </template>
@@ -505,16 +534,36 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
         // window.removeEventListener('resize', this.onResize);
       },
       methods: {
-        // onResize() {
-        //   let height = window.innerHeight;
-        //   const headerRow = document.querySelector('.app_toolbar__wrapper');
-        //   height -= headerRow.clientHeight;
-        //   const dtable = document.querySelector('.v-data-table__wrapper');
-        //   dtable.style.height = height + 'px';
-        // },
+        onRule(index, rowIndex) {
+          this.selectedRuleIndex = index;
+          var factorRowIndexs = [];
+          var itemRowIndexs = [];
+          if (index >= 0) {
+            var items = this.app.dt.items;
+            items.forEach((item, rowIndex) => {
+              item.choice.forEach((c, colIndex) => {
+                if (colIndex == index && (c == 'Y' || c == 'X')) {
+                  itemRowIndexs.push(rowIndex);
+                  var factorIndex = rowIndex;
+                  for (; factorIndex >= 0; factorIndex--) {
+                    if (items[factorIndex].factor_or_result.length > 0) {
+                      break;
+                    }
+                  }
+                  factorRowIndexs.push(factorIndex);
+                }
+              });
+            });
+          }
+          this.selectedFactorRowIndexs = factorRowIndexs;
+          this.selectedItemRowIndexs = itemRowIndexs;
+        },
       },
       data() {
         return {
+          selectedRuleIndex: -1,
+          selectedFactorRowIndexs: [],
+          selectedItemRowIndexs: [],
           app: <%- data %>,
         };
       },

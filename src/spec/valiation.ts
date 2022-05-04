@@ -58,7 +58,7 @@ export class Valiation extends Entity {
   }
 
   private createDecisionTable(): DecisionTable {
-    const dTable = new DecisionTable();
+    const dTable = new DecisionTable(this.factorEntryPoint);
     const factors = Array.from(this.pictCombination.keys());
     for (const factor of factors) {
       const choiceItems = this.pictCombination.get(factor);
@@ -129,6 +129,9 @@ export class ValiationResult extends Entity {
 
 export class FactorId extends UniqueId {}
 
+/**
+ * 因子とその項目
+ */
 export class Factor extends Entity {
   constructor(readonly id: FactorId, readonly name: Name, readonly items: FactorItem[]) {
     super(id);
@@ -144,6 +147,9 @@ export class Factor extends Entity {
   }
 }
 
+/**
+ * 因子の項目
+ */
 export class FactorItem extends HasText implements ValueObject {
   constructor(readonly text: string) {
     super(text);
@@ -153,28 +159,38 @@ export class FactorItem extends HasText implements ValueObject {
 export type EntryPoint = PreCondition | Flow;
 
 export class FactorEntryPoint {
-  private _entryPoints = new Map<EntryPoint, Set<Factor>>();
+  private _entryPoints = new Map<EntryPoint, Factor[]>();
+  private _factors = new Map<Factor, EntryPoint>();
 
   add(entryPoint: EntryPoint, factors: Factor[]): void {
-    let factorSet = this._entryPoints.get(entryPoint);
-    if (!factorSet) {
-      factorSet = new Set<Factor>();
-      this._entryPoints.set(entryPoint, factorSet);
+    let epFactors = this._entryPoints.get(entryPoint);
+    if (!epFactors) {
+      epFactors = [];
+      this._entryPoints.set(entryPoint, epFactors);
     }
     for (const f of factors) {
-      factorSet.add(f);
+      if (this._factors.has(f)) {
+        throw new InvalidArgumentError('factorEntryPoints 内で同じ factor を使用することはできません');
+      }
+      this._factors.set(f, entryPoint);
+      epFactors.push(f);
     }
   }
 
+  getEntryPointByFactor(factor: Factor): EntryPoint | undefined {
+    return this._factors.get(factor);
+  }
+
+  getFactorsByEntryPoint(entryPoint: EntryPoint): Factor[] | undefined {
+    return this._entryPoints.get(entryPoint);
+  }
+
+  get entryPoints(): EntryPoint[] {
+    return Array.from(this._entryPoints.keys());
+  }
+
   get factors(): Factor[] {
-    const items = new Set<Factor>();
-    const factors: Set<Factor>[] = Array.from(this._entryPoints.values());
-    for (const ff of factors) {
-      for (const f of Array.from(ff)) {
-        items.add(f);
-      }
-    }
-    return Array.from(items.values());
+    return Array.from(this._factors.keys());
   }
 }
 
@@ -184,6 +200,9 @@ export class PictConstraint extends HasText implements ValueObject {
   }
 }
 
+/**
+ * 因子項目の選択状態
+ */
 export class FactorItemChoice implements ValueObject {
   constructor(readonly factor: Factor, readonly item: FactorItem) {}
   equals(o: FactorItemChoice): boolean {
@@ -197,6 +216,9 @@ export class FactorItemChoice implements ValueObject {
   }
 }
 
+/**
+ * 因子項目の選択の組合せ
+ */
 export class FactorItemChoiceCollection {
   private _choices: FactorItemChoice[] = [];
 
@@ -353,9 +375,9 @@ export const DTConditionRuleChoice = {
   No: 'N',
   None: 'None',
 } as const;
-type DTConditionChoice = typeof DTConditionRuleChoice[keyof typeof DTConditionRuleChoice];
+export type DTConditionChoice = typeof DTConditionRuleChoice[keyof typeof DTConditionRuleChoice];
 
-class DTConditionRow {
+export class DTConditionRow {
   private _choices: DTConditionChoice[] = [];
 
   constructor(readonly factor: Factor, readonly item: FactorItem) {}
@@ -402,6 +424,8 @@ export class DecisionTable {
   private _resultRows: DTResultRow[] = [];
   private _invalidRules: string[] = [];
 
+  constructor(private factorEntryPoint: FactorEntryPoint) {}
+
   get countOfRules(): number {
     // ルール数は、どの行を調べても同じなので 0 番目のものを使って調べる
     return this._conditionRows[0].countOfRules;
@@ -439,6 +463,28 @@ export class DecisionTable {
       }
     }
     return vertMix;
+  }
+
+  /**
+   * 条件の行の中から、データ投入点（targetEntryPoint）となる"条件の行"を抽出する
+   *
+   * @param ruleNo ルールNo（0～）
+   * @param targetEntryPoint データ投入点（事前条件 | 基本フロー）
+   * @returns データ投入点の"条件の行"
+   */
+  getRuleConditionsByEntryPoint(targetEntryPoint: EntryPoint): DTConditionRow[] {
+    const epConditionRows: DTConditionRow[] = [];
+    for (const conditionRow of this._conditionRows) {
+      const ep = this.factorEntryPoint.getEntryPointByFactor(conditionRow.factor);
+      if (!ep) {
+        // decisionTable は、factorEntryPoint から作成されるので factory から entryPoint が引けない状態はあり得ない
+        throw new InvalidArgumentError(`factor: ${conditionRow.factor.id.text} の entryPoint がない`);
+      }
+      if (ep.equals(targetEntryPoint)) {
+        epConditionRows.push(conditionRow);
+      }
+    }
+    return epConditionRows;
   }
 
   getRuleResults(ruleNo: number): DTResultRow[] {
