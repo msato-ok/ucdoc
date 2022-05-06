@@ -1,9 +1,10 @@
 import { UniqueId, Entity } from './core';
 import { PreCondition } from './prepostcondition';
+import { Actor } from './actor';
 import { Valiation, EntryPoint } from './valiation';
-import { DTConditionRow, DecisionTable, DecisionTableFactory } from './decision_table';
-import { UcScenario } from './uc_scenario';
-import { Flow } from './flow';
+import { DTConditionRow, DTResultRow, DecisionTable, DecisionTableFactory } from './decision_table';
+import { UcScenario, UcScenarioType } from './uc_scenario';
+import { Flow, AlternateFlow, ExceptionFlow } from './flow';
 import { InvalidArgumentError } from '../common';
 
 export class UcScenarioStepId extends UniqueId {
@@ -13,7 +14,7 @@ export class UcScenarioStepId extends UniqueId {
   constructor(readonly entryPoint: EntryPoint, readonly conditionRow: DTConditionRow | undefined) {
     let text = entryPoint.id.text;
     if (conditionRow) {
-      const joinFull = [entryPoint.id.text, conditionRow.factor.id.text, conditionRow.item.text].join('\n');
+      const joinFull = [entryPoint.id.text, conditionRow.factor.id.text, conditionRow.level.text].join('\n');
       const seqText = UcScenarioStepId.epSubSeqText.get(joinFull);
       if (seqText) {
         text = seqText;
@@ -23,6 +24,8 @@ export class UcScenarioStepId extends UniqueId {
         if (!subSeq) {
           subSeq = 1;
           UcScenarioStepId.epSubSeq.set(prefix, subSeq);
+        } else {
+          subSeq++;
         }
         text = `${prefix}-${subSeq}`;
         UcScenarioStepId.epSubSeqText.set(joinFull, text);
@@ -32,6 +35,13 @@ export class UcScenarioStepId extends UniqueId {
   }
 }
 
+export const UcScenarioStepType = {
+  PreCondition: 'PreCondition',
+  ActorOperation: 'ActorOperation',
+  Expected: 'Expected',
+} as const;
+export type UcScenarioStepType = typeof UcScenarioStepType[keyof typeof UcScenarioStepType];
+
 export class UcScenarioStep extends Entity {
   readonly id: UcScenarioStepId;
   constructor(readonly entryPoint: EntryPoint, readonly conditionRow: DTConditionRow | undefined) {
@@ -39,11 +49,30 @@ export class UcScenarioStep extends Entity {
     super(id);
     this.id = id;
   }
+
+  get stepType(): UcScenarioStepType {
+    if (this.entryPoint instanceof PreCondition) {
+      return UcScenarioStepType.PreCondition;
+    }
+    if (this.entryPoint.player instanceof Actor) {
+      return UcScenarioStepType.ActorOperation;
+    }
+    return UcScenarioStepType.Expected;
+  }
+}
+
+export class UcScenarioResultId extends UniqueId {}
+
+export class UcScenarioResult extends Entity {
+  constructor(readonly id: UcScenarioResultId, readonly result: DTResultRow) {
+    super(id);
+  }
 }
 
 export class UcScenarioDecisionTable {
   private preConditionRows: UcScenarioStep[] = [];
-  private flowRows: UcScenarioStep[] = [];
+  private stepRows: UcScenarioStep[] = [];
+  private resultRows: UcScenarioResult[] = [];
 
   constructor(readonly decisionTable: DecisionTable) {}
 
@@ -51,21 +80,40 @@ export class UcScenarioDecisionTable {
     return this.decisionTable.countOfRules;
   }
 
+  get preConditionSteps(): UcScenarioStep[] {
+    return Array.from(this.preConditionRows.values());
+  }
+
   get steps(): UcScenarioStep[] {
-    return Array.from(this.preConditionRows.values()).concat(Array.from(this.flowRows.values()));
+    return Array.from(this.stepRows.values());
+  }
+
+  get results(): UcScenarioResult[] {
+    return this.resultRows;
   }
 
   private addStep(ep: EntryPoint, o: UcScenarioStep) {
     if (ep instanceof PreCondition) {
       this.preConditionRows.push(o);
     } else if (ep instanceof Flow) {
-      this.flowRows.push(o);
+      this.stepRows.push(o);
     } else {
       throw new InvalidArgumentError(`unknown ep instance type: ${typeof ep}`);
     }
   }
 
-  addConditionRow(ep: EntryPoint, conditionRows: DTConditionRow[]) {
+  addPreCondition(ep: PreCondition, conditionRows: DTConditionRow[]) {
+    for (const conditionRow of conditionRows) {
+      const o = new UcScenarioStep(ep, conditionRow);
+      this.addStep(ep, o);
+    }
+    if (conditionRows.length == 0) {
+      const o = new UcScenarioStep(ep, undefined);
+      this.addStep(ep, o);
+    }
+  }
+
+  addFlow(ep: Flow, conditionRows: DTConditionRow[]) {
     for (const conditionRow of conditionRows) {
       const o = new UcScenarioStep(ep, conditionRow);
       this.addStep(ep, o);
@@ -85,16 +133,30 @@ export class UcScenarioDecisionTableFactory {
     ucScenario: UcScenario,
     valiation: Valiation,
     preConditions: PreCondition[]
-  ): UcScenarioDecisionTable {
-    const dt = DecisionTableFactory.getInstance(valiation);
+  ): UcScenarioDecisionTable | undefined {
+    let dt;
+    if (ucScenario.ucScenarioType == UcScenarioType.BasicFlowScenario) {
+      dt = DecisionTableFactory.getBasicFlowInstance(valiation);
+    } else if (ucScenario.ucScenarioType == UcScenarioType.AlternateFlowScenario) {
+      const altFlow = ucScenario.altExFlow as AlternateFlow;
+      dt = DecisionTableFactory.getAlternateFlowInstance(valiation, altFlow);
+    } else if (ucScenario.ucScenarioType == UcScenarioType.ExceptionFlowScenario) {
+      const exFlow = ucScenario.altExFlow as ExceptionFlow;
+      dt = DecisionTableFactory.getExceptionFlowInstance(valiation, exFlow);
+    } else {
+      throw new InvalidArgumentError();
+    }
+    if (!dt) {
+      return undefined;
+    }
     const ucDt = new UcScenarioDecisionTable(dt);
     for (const preCondition of preConditions) {
       const conditionRows = dt.getRuleConditionsByEntryPoint(preCondition);
-      ucDt.addConditionRow(preCondition, conditionRows);
+      ucDt.addPreCondition(preCondition, conditionRows);
     }
     for (const flow of ucScenario.flows.items) {
       const conditionRows = dt.getRuleConditionsByEntryPoint(flow);
-      ucDt.addConditionRow(flow, conditionRows);
+      ucDt.addFlow(flow, conditionRows);
     }
     return ucDt;
   }

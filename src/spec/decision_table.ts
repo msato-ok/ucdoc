@@ -1,4 +1,3 @@
-import { Description } from './core';
 import { ValidationError, InvalidArgumentError } from '../common';
 import {
   Factor,
@@ -8,7 +7,12 @@ import {
   FactorLevelChoice,
   FactorLevelChoiceCollection,
   Valiation,
+  ValiationResult,
+  ValiationResultCollection,
+  PictFactory,
+  Pict,
 } from './valiation';
+import { AlternateFlow, ExceptionFlow } from './flow';
 
 export class DTValidationError extends ValidationError {}
 
@@ -17,22 +21,22 @@ export const DTConditionRuleChoice = {
   No: 'N',
   None: 'None',
 } as const;
-export type DTConditionChoice = typeof DTConditionRuleChoice[keyof typeof DTConditionRuleChoice];
+export type DTConditionRuleChoice = typeof DTConditionRuleChoice[keyof typeof DTConditionRuleChoice];
 
 export class DTConditionRow {
-  private _choices: DTConditionChoice[] = [];
+  private _choices: DTConditionRuleChoice[] = [];
 
-  constructor(readonly factor: Factor, readonly item: FactorLevel) {}
+  constructor(readonly factor: Factor, readonly level: FactorLevel) {}
 
   get countOfRules(): number {
     return this._choices.length;
   }
 
-  get rules(): DTConditionChoice[] {
+  get rules(): DTConditionRuleChoice[] {
     return this._choices;
   }
 
-  add(rule: DTConditionChoice) {
+  add(rule: DTConditionRuleChoice) {
     this._choices.push(rule);
   }
 }
@@ -43,10 +47,10 @@ export const DTResultRuleChoice = {
 } as const;
 type DTResultRuleChoice = typeof DTResultRuleChoice[keyof typeof DTResultRuleChoice];
 
-class DTResultRow {
+export class DTResultRow {
   private _choices: DTResultRuleChoice[] = [];
 
-  constructor(readonly desc: Description) {}
+  constructor(readonly result: ValiationResult) {}
 
   get countOfRules(): number {
     return this._choices.length;
@@ -64,22 +68,27 @@ class DTResultRow {
 export class DecisionTable {
   private _conditionRows: DTConditionRow[] = [];
   private _resultRows: DTResultRow[] = [];
-  private _invalidRules: string[] = [];
+  private _invalidRuleMessages: string[] = [];
+  private _invalidRuleNos: number[] = [];
+  private _validated = false;
 
   constructor(private factorEntryPoint: FactorEntryPoint) {}
 
   validate(): void {
-    this._invalidRules = [];
+    this._validated = true;
+    this._invalidRuleMessages = [];
+    this._invalidRuleNos = [];
     for (let ruleNo = 0; ruleNo < this.countOfRules; ruleNo++) {
       const ruleRows = this.getRuleResults(ruleNo);
       if (ruleRows.length == 0) {
-        this._invalidRules.push(`ruleNo=${ruleNo + 1} の期待値となる結果が1つもありません`);
+        this._invalidRuleMessages.push(`ruleNo=${ruleNo + 1} の期待値となる結果が1つもありません`);
+        this._invalidRuleNos.push(ruleNo);
       }
     }
-    if (this.invalidRules.length > 0) {
+    if (this._invalidRuleMessages.length > 0) {
       const errmsg = [
-        `${this.invalidRules.join('\n')}`,
-        '※ ruleNoはデシジョンテーブルのmdを作成して確認してください。',
+        `${this._invalidRuleMessages.join('\n')}`,
+        '※ ruleNoはデシジョンテーブルを作成して確認してください。',
         'usage: ucdoc decision <file> [otherFiles...]',
       ].join('\n');
       throw new DTValidationError(errmsg);
@@ -87,6 +96,9 @@ export class DecisionTable {
   }
 
   get countOfRules(): number {
+    if (this._conditionRows.length == 0) {
+      return 0;
+    }
     // ルール数は、どの行を調べても同じなので 0 番目のものを使って調べる
     return this._conditionRows[0].countOfRules;
   }
@@ -100,10 +112,12 @@ export class DecisionTable {
   }
 
   addCondition(row: DTConditionRow) {
+    this._validated = false;
     this._conditionRows.push(row);
   }
 
   addResult(row: DTResultRow) {
+    this._validated = false;
     this._resultRows.push(row);
   }
 
@@ -115,7 +129,7 @@ export class DecisionTable {
     for (const conditionRow of this._conditionRows) {
       const yn = conditionRow.rules[ruleNo];
       if (yn == DTConditionRuleChoice.Yes) {
-        vertMix.add(new FactorLevelChoice(conditionRow.factor, conditionRow.item));
+        vertMix.add(new FactorLevelChoice(conditionRow.factor, conditionRow.level));
       } else if (yn == DTConditionRuleChoice.None) {
         // skip
       } else {
@@ -165,34 +179,80 @@ export class DecisionTable {
     return vertMix;
   }
 
-  get invalidRules(): string[] {
-    return this._invalidRules;
+  get invalidRuleMessages(): string[] {
+    return this._invalidRuleMessages;
+  }
+
+  get invalidRuleNos(): number[] {
+    return this._invalidRuleNos;
+  }
+
+  /**
+   * 結果検証される因子水準の組み合わせを抽出する
+   *
+   * 因子水準の組み合わせでテストを実行しても、検証方法が不明なものは除外する。
+   * （resultRow のどの rule にも拾い上げられない因子水準は除外される）
+   *
+   * @returns 因子水準のリスト
+   */
+  getUsedFactorLevels(): FactorLevelChoiceCollection {
+    if (!this._validated) {
+      throw new InvalidArgumentError('validate() が実行されていません');
+    }
+    const used = new FactorLevelChoiceCollection();
+    const safeRules = [...Array(this.countOfRules)].map((_: undefined, idx: number) => idx);
+    for (const ruleNo of this.invalidRuleNos) {
+      const i = safeRules.indexOf(ruleNo);
+      safeRules.splice(i, 1);
+    }
+    for (const conditionRow of this.conditionRows) {
+      for (const ruleNo of safeRules) {
+        if (conditionRow.rules[ruleNo] == DTConditionRuleChoice.Yes) {
+          const choice = new FactorLevelChoice(conditionRow.factor, conditionRow.level);
+          if (!used.contains(choice)) {
+            used.add(choice);
+          }
+        } else if (conditionRow.rules[ruleNo] == DTConditionRuleChoice.No) {
+          throw new InvalidArgumentError('not implements');
+        } else if (conditionRow.rules[ruleNo] == DTConditionRuleChoice.None) {
+          continue;
+        } else {
+          throw new InvalidArgumentError(`unknown rule choice: ${conditionRow.rules[ruleNo]}`);
+        }
+      }
+    }
+    return used;
   }
 }
 
 export class DecisionTableFactory {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  private constructor() {}
+
+  private static recreateCount = 0;
+
   static getInstance(valiation: Valiation): DecisionTable {
     const dTable = new DecisionTable(valiation.factorEntryPoint);
-    const factors = Array.from(valiation.pictCombination.keys());
+    const factors = Array.from(valiation.pict.factors);
     for (const factor of factors) {
-      const choiceItems = valiation.pictCombination.get(factor);
-      if (!choiceItems) {
+      const choiceLevels = valiation.pict.getLevels(factor);
+      if (!choiceLevels) {
         throw new InvalidArgumentError();
       }
-      const uniqItems = new Set<FactorLevel>();
-      for (const item of choiceItems) {
-        uniqItems.add(item);
+      const uniqLevels = new Set<FactorLevel>();
+      for (const level of choiceLevels) {
+        uniqLevels.add(level);
       }
-      const sortedChoiceItems: FactorLevel[] = [];
-      for (const item of factor.levels) {
-        if (uniqItems.has(item)) {
-          sortedChoiceItems.push(item);
+      const sortedChoiceLevels: FactorLevel[] = [];
+      for (const level of factor.levels) {
+        if (uniqLevels.has(level)) {
+          sortedChoiceLevels.push(level);
         }
       }
-      for (const sortedChoiceItem of sortedChoiceItems) {
-        const row = new DTConditionRow(factor, sortedChoiceItem);
-        for (const choiceItem of choiceItems) {
-          if (choiceItem == sortedChoiceItem) {
+      for (const sortedChoiceLevel of sortedChoiceLevels) {
+        const row = new DTConditionRow(factor, sortedChoiceLevel);
+        for (const choiceLevel of choiceLevels) {
+          if (choiceLevel == sortedChoiceLevel) {
             row.add(DTConditionRuleChoice.Yes);
           } else {
             row.add(DTConditionRuleChoice.None);
@@ -201,8 +261,8 @@ export class DecisionTableFactory {
         dTable.addCondition(row);
       }
     }
-    for (const result of valiation.results) {
-      const row = new DTResultRow(result.desc);
+    for (const result of valiation.results.items) {
+      const row = new DTResultRow(result);
       for (let ruleNo = 0; ruleNo < dTable.countOfRules; ruleNo++) {
         const ruleConditions = dTable.getRuleConditions(ruleNo);
         if (ruleConditions.containsAll(result.choices.items)) {
@@ -214,5 +274,81 @@ export class DecisionTableFactory {
       dTable.addResult(row);
     }
     return dTable;
+  }
+
+  /**
+   * 結果検証で使用されている因子だけで Valiation を再構成して
+   *
+   * @param orgValiation //
+   * @param filterdResults
+   * @returns
+   */
+  static _recreateFromVerificationPoint(
+    orgValiation: Valiation,
+    orgFactorEntryPoint: FactorEntryPoint,
+    pict: Pict,
+    filterdResults: ValiationResultCollection
+  ): DecisionTable {
+    if (++this.recreateCount > 2) {
+      throw new InvalidArgumentError(`infinite loop: ${this.recreateCount}`);
+    }
+    let factorEntryPoint = orgFactorEntryPoint.copy();
+    const valiation = new Valiation(orgValiation.id, orgValiation.description, factorEntryPoint, pict, filterdResults);
+    const dt = DecisionTableFactory.getInstance(valiation);
+    try {
+      dt.validate();
+      return dt;
+    } catch (e) {
+      if (dt.invalidRuleNos.length === 0) {
+        throw e;
+      }
+    }
+    const usedChoices = dt.getUsedFactorLevels();
+    const newFactors = usedChoices.regenerateFactors();
+    factorEntryPoint = factorEntryPoint.regenarateFromFactors(newFactors);
+    pict = PictFactory.getInstance(factorEntryPoint, pict.pictConstraint);
+    return this._recreateFromVerificationPoint(orgValiation, factorEntryPoint, pict, filterdResults);
+  }
+
+  static getBasicFlowInstance(orgValiation: Valiation): DecisionTable | undefined {
+    this.recreateCount = 0;
+    const filterdResults = orgValiation.results.getPostCondiVerificationItems();
+    if (filterdResults.size == 0) {
+      return undefined;
+    }
+    return this._recreateFromVerificationPoint(
+      orgValiation,
+      orgValiation.factorEntryPoint,
+      orgValiation.pict,
+      filterdResults
+    );
+  }
+
+  static getAlternateFlowInstance(orgValiation: Valiation, altFlow: AlternateFlow): DecisionTable | undefined {
+    this.recreateCount = 0;
+    const filterdResults = orgValiation.results.getAltVerificationItems(altFlow);
+    if (filterdResults.size == 0) {
+      return undefined;
+    }
+    return this._recreateFromVerificationPoint(
+      orgValiation,
+      orgValiation.factorEntryPoint,
+      orgValiation.pict,
+      filterdResults
+    );
+  }
+
+  static getExceptionFlowInstance(orgValiation: Valiation, exFlow: ExceptionFlow): DecisionTable | undefined {
+    this.recreateCount = 0;
+    const filterdResults = orgValiation.results.getExVerificationItems(exFlow);
+    if (filterdResults.size == 0) {
+      return undefined;
+    }
+    return this._recreateFromVerificationPoint(
+      orgValiation,
+      orgValiation.factorEntryPoint,
+      orgValiation.pict,
+      filterdResults
+    );
   }
 }

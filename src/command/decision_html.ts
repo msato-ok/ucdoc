@@ -34,7 +34,7 @@ class DTSection {
       const itemRow: IDTRow = {
         dt_title: '',
         factor_or_result: '',
-        factor_item: conditionRow.item.text,
+        factor_item: conditionRow.level.text,
         choice: [],
       };
       if (!condTitleOut) {
@@ -62,7 +62,7 @@ class DTSection {
     for (const resultRow of dt.resultRows) {
       const itemRow: IDTRow = {
         dt_title: '',
-        factor_or_result: resultRow.desc.text,
+        factor_or_result: resultRow.result.desc.text,
         factor_item: '',
         choice: [],
       };

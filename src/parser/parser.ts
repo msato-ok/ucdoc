@@ -93,6 +93,7 @@ export interface IExceptionFlowProps {
 }
 
 export interface IValiationProps {
+  description: string;
   factorEntryPoints: {
     [key: string]: IEntryFactorsProps;
   };
@@ -114,7 +115,7 @@ export interface IFactorProps {
 export type FilterFirstOrder = 'arrow' | 'disarrow';
 
 export interface IValiationResultProps {
-  desc: string;
+  description: string;
   order?: FilterFirstOrder; // default: arrow
   arrow?: {
     [key: string]: string[];

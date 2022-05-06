@@ -70,7 +70,7 @@ export class UsecaseCommand extends AbstractSpecCommand {
 ## 事後条件
 <%_ uc.postConditions.forEach((condition, id) => { %>
 - <%= condition.id.text %>: <%= condition.description.text -%>
-  <%_ condition.details.forEach((detail, id) => { %>
+  <%_ condition.childNodes.forEach((detail, id) => { %>
     - <%= detail.id.text %>: <%= detail.description.text -%>
   <% }); %>
 <% }); %>

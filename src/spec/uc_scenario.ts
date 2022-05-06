@@ -17,7 +17,7 @@ export const UcScenarioType = {
   // 例外フローを検証するシナリオ
   ExceptionFlowScenario: 'ExceptionFlowScenario',
 } as const;
-type UcScenarioType = typeof UcScenarioType[keyof typeof UcScenarioType];
+export type UcScenarioType = typeof UcScenarioType[keyof typeof UcScenarioType];
 
 /**
  * 分岐タイプ
@@ -116,15 +116,6 @@ export class UcScenarioCollection {
     return this._ucScenarios;
   }
 
-  /**
-   * シナリオが指定されたフローを実行する場合に true を返す
-   *
-   * 表の中でシナリオとフローの交わるところが ○ になる場合 true を返す
-   */
-  isUsing(flow: Flow, scenario: UcScenario): boolean {
-    return scenario.flows.contains(flow);
-  }
-
   getBranchType(flow: Flow): string {
     const scenarios = this.getScenariosByFLow(flow);
     if (scenarios.length == 0) {
@@ -195,21 +186,11 @@ export class UcScenarioCollectionFactory {
     );
     const ucScenarioCollection = new UcScenarioCollection(baseScenario);
     for (const altFlow of uc.alternateFlows.items) {
-      const scenario = new UcScenario(
-        this.genScenarioId(testNo++),
-        new Description(`代替フロー（${altFlow.description.text}）の検証シナリオ`),
-        altFlow.mergedFlows,
-        altFlow
-      );
+      const scenario = new UcScenario(this.genScenarioId(testNo++), altFlow.description, altFlow.mergedFlows, altFlow);
       ucScenarioCollection.add(scenario);
     }
     for (const exFlow of uc.exceptionFlows.items) {
-      const scenario = new UcScenario(
-        this.genScenarioId(testNo++),
-        new Description(`例外フロー（${exFlow.description.text}）の検証シナリオ`),
-        exFlow.mergedFlows,
-        exFlow
-      );
+      const scenario = new UcScenario(this.genScenarioId(testNo++), exFlow.description, exFlow.mergedFlows, exFlow);
       ucScenarioCollection.add(scenario);
     }
     return ucScenarioCollection;

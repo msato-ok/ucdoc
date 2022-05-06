@@ -29,7 +29,7 @@ export class PictCommand extends AbstractSpecCommand {
     for (let itemNo = 0; itemNo < itemCount; itemNo++) {
       const iids = [];
       for (const factor of valiation.factorEntryPoint.factors) {
-        const items = valiation.pictCombination.get(factor);
+        const items = valiation.pict.getLevels(factor);
         if (!items) {
           throw new BugError();
         }

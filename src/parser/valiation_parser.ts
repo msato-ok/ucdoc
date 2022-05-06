@@ -10,7 +10,8 @@ import {
   PictConstraint,
   ValiationResult,
   ValiationResultId,
-  PictCombiFactory,
+  ValiationResultCollection,
+  PictFactory,
   Factor,
   FactorId,
   FactorLevel,
@@ -46,36 +47,38 @@ export function parseValiations(
       const factorEntryPoint = new FactorEntryPoint();
       const factorInValiation = new Cache<Factor>();
       ctx.push('factorEntryPoints');
-      for (const [entryPointId, entryFactorsProps] of Object.entries(props.factorEntryPoints)) {
-        ctx.push(entryPointId);
-        let entryPoint: EntryPoint | undefined = preConditionDic.get(new PrePostConditionId(entryPointId));
-        if (entryPoint) {
-          sourcePreConds.push(entryPoint);
-        }
-        if (!entryPoint) {
-          entryPoint = basicFlowDic.get(new FlowId(entryPointId));
+      if (props.factorEntryPoints) {
+        for (const [entryPointId, entryFactorsProps] of Object.entries(props.factorEntryPoints)) {
+          ctx.push(entryPointId);
+          let entryPoint: EntryPoint | undefined = preConditionDic.get(new PrePostConditionId(entryPointId));
           if (entryPoint) {
-            sourceFlows.push(entryPoint);
+            sourcePreConds.push(entryPoint);
           }
-        }
-        if (!entryPoint) {
-          throw new ParseError(`${entryPointId} は preConditions および basicFlows に未定義です。`);
-        }
-        for (const factorId of entryFactorsProps.factors) {
-          const factor = factorDic.get(new FactorId(factorId));
-          if (!factor) {
-            throw new ParseError(`${factorId} は factors に未定義です。`);
+          if (!entryPoint) {
+            entryPoint = basicFlowDic.get(new FlowId(entryPointId));
+            if (entryPoint) {
+              sourceFlows.push(entryPoint);
+            }
           }
-          factorEntryPoint.add(entryPoint, [factor]);
-          factorInValiation.add(factor);
+          if (!entryPoint) {
+            throw new ParseError(`${entryPointId} は preConditions および basicFlows に未定義です。`);
+          }
+          for (const factorId of entryFactorsProps.factors) {
+            const factor = factorDic.get(new FactorId(factorId));
+            if (!factor) {
+              throw new ParseError(`${factorId} は factors に未定義です。`);
+            }
+            factorEntryPoint.add(entryPoint, [factor]);
+            factorInValiation.add(factor);
+          }
+          ctx.pop(entryPointId);
         }
-        ctx.pop(entryPointId);
-      }
-      if (sourcePreConds.length == 0 && sourceFlows.length == 0) {
-        throw new ParseError('factorEntryPoints が未定義です。');
+        if (sourcePreConds.length == 0 && sourceFlows.length == 0) {
+          throw new ParseError('factorEntryPoints が未定義です。');
+        }
       }
       ctx.pop('factorEntryPoints');
-      const results = [];
+      const results = new ValiationResultCollection();
       ctx.push('results');
       for (const [resultId, resultProps] of Object.entries(props.results)) {
         const vr = parseValiationResult(
@@ -87,30 +90,33 @@ export function parseValiations(
           exceptionFlows,
           factorInValiation
         );
-        results.push(vr);
+        results.add(vr);
       }
       ctx.pop('results');
-      const pictCombi = PictCombiFactory.getInstance(factorEntryPoint.factors);
+      const pict = PictFactory.getInstance(factorEntryPoint, new PictConstraint(props.pictConstraint));
       const valiation = new Valiation(
         new ValiationId(id),
-        sourceFlows,
+        new Description(props.description),
         factorEntryPoint,
-        new PictConstraint(props.pictConstraint),
-        pictCombi,
+        pict,
         results
       );
       const dt = DecisionTableFactory.getInstance(valiation);
       try {
         dt.validate();
       } catch (e) {
-        if (!strictValidation && dt.invalidRules.length > 0) {
-          const errmsg = [
-            `${dt.invalidRules.map(x => `  - ${x}`).join('\n')}`,
-            '  ※ ruleNoはデシジョンテーブルのmdを作成して確認してください。',
-            '  usage: ucdoc decision <file> [otherFiles...]',
-          ].join('\n');
-          console.warn(`WARN: ${ctx.pathText}:\n${errmsg}`);
+        if (strictValidation) {
+          throw e;
         }
+        if (dt.invalidRuleMessages.length === 0) {
+          throw e;
+        }
+        const errmsg = [
+          `${dt.invalidRuleMessages.map(x => `  - ${x}`).join('\n')}`,
+          '  ※ ruleNoはデシジョンテーブルを作成して確認してください。',
+          '  usage: ucdoc decision <file> [otherFiles...]',
+        ].join('\n');
+        console.warn(`WARN: ${ctx.pathText}:\n${errmsg}`);
       }
       valiations.push(valiation);
       ctx.pop(id);
@@ -187,7 +193,7 @@ function parseValiationResult(
   ctx.pop('verificationPointIds');
   const result = new ValiationResult(
     new ValiationResultId(resultId),
-    new Description(resultProps.desc),
+    new Description(resultProps.description),
     choices,
     verificationPoints
   );
@@ -198,13 +204,13 @@ function parseValiationResult(
 function parseFactorLevelChoiceCollection(
   ctx: ParserContext,
   factorInValiation: Cache<Factor>,
-  ad?: { [key: string]: string[] }
+  arrowOrDisarrow?: { [key: string]: string[] }
 ): FactorLevelChoiceCollection {
-  const adChoices = new FactorLevelChoiceCollection();
-  if (!ad) {
-    return adChoices;
+  const resultChoices = new FactorLevelChoiceCollection();
+  if (!arrowOrDisarrow) {
+    return resultChoices;
   }
-  for (const [factorId, factorLevels] of Object.entries(ad)) {
+  for (const [factorId, factorLevels] of Object.entries(arrowOrDisarrow)) {
     ctx.push(factorId);
     const factor = factorInValiation.get(factorId);
     if (!factor) {
@@ -217,10 +223,10 @@ function parseFactorLevelChoiceCollection(
         throw new ParseError(`${item} は factors/${factorId}/items の中で未定義です。`);
       }
       const choice = new FactorLevelChoice(factor, itemObj);
-      adChoices.add(choice);
+      resultChoices.add(choice);
       ctx.pop(item);
     }
     ctx.pop(factorId);
   }
-  return adChoices;
+  return resultChoices;
 }

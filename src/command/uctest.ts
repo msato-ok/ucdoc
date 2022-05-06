@@ -6,7 +6,7 @@ import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
 import { UseCase } from '../spec/usecase';
-import { UcScenarioDecisionTableFactory } from '../spec/uc_scenario_dt';
+import { UcScenarioDecisionTableFactory, UcScenarioStep, UcScenarioStepType } from '../spec/uc_scenario_dt';
 import {
   UcScenarioCollectionFactory,
   UcScenarioCollection,
@@ -15,7 +15,8 @@ import {
   BranchType,
 } from '../spec/uc_scenario';
 import { AlternateFlow, ExceptionFlow } from '../spec/flow';
-import { DTConditionRuleChoice } from '../spec/decision_table';
+import { DTConditionRuleChoice, DTResultRuleChoice } from '../spec/decision_table';
+import { PostCondition } from '../spec/prepostcondition';
 
 // ■ html属性に関する注意
 //
@@ -66,17 +67,24 @@ interface IScenarioFlow {
 }
 
 interface IScenarioDTable {
+  valiation_id: string;
+  valiation_title: string;
   scenario_id: string;
+  scenario_title: string;
+  scenario_type: string;
   countOfRules: number;
   items: IStep[];
 }
 
 interface IStep {
+  step_colspan: number;
   step_id: string;
   operation_desc: string;
+  expected_desc: string;
   factor_desc: string;
   factor_select_item: string;
   factor_select_rules: string[];
+  factor_colspan: number;
 }
 
 class ScenarioFlowSection {
@@ -144,55 +152,6 @@ class ScenarioFlowSection {
   }
 }
 
-function genScenarioDTables(ucAllScenario: UcScenarioCollection, uc: UseCase): IScenarioDTable[] {
-  const ucDtJsons: IScenarioDTable[] = [];
-  for (const ucScenario of ucAllScenario.scenarios) {
-    for (const valiation of uc.valiations) {
-      const ucDt = UcScenarioDecisionTableFactory.getInstance(ucScenario, valiation, uc.preConditions);
-      const ucDtJson = {
-        scenario_id: ucScenario.id.text,
-        countOfRules: ucDt.countOfRules,
-        items: [],
-      } as IScenarioDTable;
-      const prevJson = {
-        operation_desc: '',
-        factor_desc: '',
-        factor_select_item: '',
-      };
-      for (const step of ucDt.steps) {
-        const stepJson = {
-          step_id: step.id.text,
-          operation_desc: step.entryPoint.description.text,
-          factor_desc: '',
-          factor_select_item: '',
-          factor_select_rules: Array(ucDt.countOfRules).fill(' '),
-        } as IStep;
-        if (step.conditionRow) {
-          const conditionRow = step.conditionRow;
-          stepJson.factor_desc = conditionRow.factor.name.text;
-          stepJson.factor_select_item = conditionRow.item.text;
-          stepJson.factor_select_rules = conditionRow.rules.map(x =>
-            x == DTConditionRuleChoice.Yes ? 'Y' : x == DTConditionRuleChoice.No ? 'N' : ' '
-          );
-        }
-        if (prevJson.operation_desc == stepJson.operation_desc) {
-          stepJson.operation_desc = '';
-        } else {
-          prevJson.operation_desc = stepJson.operation_desc;
-        }
-        if (prevJson.factor_desc == stepJson.factor_desc) {
-          stepJson.factor_desc = '';
-        } else {
-          prevJson.factor_desc = stepJson.factor_desc;
-        }
-        ucDtJson.items.push(stepJson);
-      }
-      ucDtJsons.push(ucDtJson);
-    }
-  }
-  return ucDtJsons;
-}
-
 export class UsecaseTestCommand extends AbstractSpecCommand {
   public execute(app: App): void {
     app.usecases.forEach(uc => {
@@ -202,20 +161,132 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
     });
   }
 
+  private generateScenarioDTables(ucAllScenario: UcScenarioCollection, uc: UseCase): IScenarioDTable[] {
+    const ucDtJsons: IScenarioDTable[] = [];
+    for (const valiation of uc.valiations) {
+      for (const ucScenario of ucAllScenario.scenarios) {
+        const ucDt = UcScenarioDecisionTableFactory.getInstance(ucScenario, valiation, uc.preConditions);
+        if (!ucDt) {
+          continue;
+        }
+        const ucDtJson = {
+          valiation_id: valiation.id.text,
+          valiation_title: valiation.description.text,
+          scenario_id: ucScenario.id.text,
+          scenario_title: ucScenario.description.text,
+          scenario_type: this.convUcScenarioType(ucScenario),
+          countOfRules: ucDt.countOfRules,
+          items: [],
+        } as IScenarioDTable;
+        const newStepJson = (stepIdText: string): IStep => {
+          return {
+            step_colspan: 1,
+            step_id: stepIdText,
+            operation_desc: '',
+            expected_desc: '',
+            factor_desc: '',
+            factor_select_item: '',
+            factor_select_rules: Array(ucDt.countOfRules).fill(' '),
+            factor_colspan: 1,
+          } as IStep;
+        };
+        let prevJson = newStepJson('');
+        const appendStepHeader = (headText: string) => {
+          const header = newStepJson(headText);
+          header.step_colspan = 5 + ucDt.countOfRules;
+          ucDtJson.items.push(header);
+          prevJson = newStepJson(headText);
+        };
+        const updateConditionRow = (stepJson: IStep, step: UcScenarioStep) => {
+          if (step.conditionRow) {
+            const conditionRow = step.conditionRow;
+            stepJson.factor_desc = conditionRow.factor.name.text;
+            stepJson.factor_select_item = conditionRow.level.text;
+            stepJson.factor_select_rules = conditionRow.rules.map(x =>
+              x == DTConditionRuleChoice.Yes ? 'Y' : x == DTConditionRuleChoice.No ? 'N' : ' '
+            );
+          }
+        };
+        const eraseSameTextAsPrevLine = (stepJson: IStep) => {
+          if (prevJson.operation_desc == stepJson.operation_desc) {
+            stepJson.operation_desc = '';
+          } else {
+            prevJson.operation_desc = stepJson.operation_desc;
+          }
+          if (prevJson.expected_desc == stepJson.expected_desc) {
+            stepJson.expected_desc = '';
+          } else {
+            prevJson.expected_desc = stepJson.expected_desc;
+          }
+          if (prevJson.factor_desc == stepJson.factor_desc) {
+            stepJson.factor_desc = '';
+          } else {
+            prevJson.factor_desc = stepJson.factor_desc;
+          }
+        };
+        appendStepHeader('【事前条件】');
+        for (const step of ucDt.preConditionSteps) {
+          const stepJson = newStepJson(step.id.text);
+          stepJson.operation_desc = step.entryPoint.description.text;
+          updateConditionRow(stepJson, step);
+          eraseSameTextAsPrevLine(stepJson);
+          ucDtJson.items.push(stepJson);
+        }
+        appendStepHeader('【手順】');
+        for (const step of ucDt.steps) {
+          const stepJson = newStepJson(step.id.text);
+          if (step.stepType == UcScenarioStepType.ActorOperation) {
+            stepJson.operation_desc = step.entryPoint.description.text;
+          } else if (step.stepType == UcScenarioStepType.Expected) {
+            stepJson.expected_desc = step.entryPoint.description.text;
+          }
+          updateConditionRow(stepJson, step);
+          eraseSameTextAsPrevLine(stepJson);
+          ucDtJson.items.push(stepJson);
+        }
+        let resultHeader = false;
+        for (const resultRow of ucDt.decisionTable.resultRows) {
+          for (const vp of resultRow.result.verificationPoints) {
+            if (!(vp instanceof PostCondition)) {
+              continue;
+            }
+            if (!resultHeader) {
+              appendStepHeader('【事後条件】');
+              resultHeader = true;
+            }
+            const stepJson = newStepJson(vp.id.text);
+            stepJson.expected_desc = resultRow.result.desc.text;
+            stepJson.factor_select_rules = resultRow.rules.map(x =>
+              x == DTResultRuleChoice.Check ? 'X' : x == DTResultRuleChoice.None ? ' ' : '不明'
+            );
+            stepJson.factor_desc = vp.description.text;
+            stepJson.factor_colspan = 2;
+            eraseSameTextAsPrevLine(stepJson);
+            ucDtJson.items.push(stepJson);
+          }
+        }
+        ucDtJsons.push(ucDtJson);
+      }
+    }
+    return ucDtJsons;
+  }
+
+  private convUcScenarioType(ucScenario: UcScenario): string {
+    return ucScenario.ucScenarioType == UcScenarioType.BasicFlowScenario
+      ? '基本フローの検証'
+      : ucScenario.ucScenarioType == UcScenarioType.AlternateFlowScenario
+      ? `代替フロー(${ucScenario.altExFlow?.id.text})の検証`
+      : ucScenario.ucScenarioType == UcScenarioType.ExceptionFlowScenario
+      ? `例外フロー(${ucScenario.altExFlow?.id.text})の検証`
+      : '不明';
+  }
+
   private assembleData(ucAllScenario: UcScenarioCollection, uc: UseCase): string {
     const scenarios: IScenario[] = [];
     for (const o of ucAllScenario.scenarios) {
-      const scenarioType =
-        o.ucScenarioType == UcScenarioType.BasicFlowScenario
-          ? '基本フローの検証'
-          : o.ucScenarioType == UcScenarioType.AlternateFlowScenario
-          ? '代替フローの検証'
-          : o.ucScenarioType == UcScenarioType.ExceptionFlowScenario
-          ? '例外フローの検証'
-          : '不明';
       scenarios.push({
         scenario_id: o.id.text,
-        scenario_type: scenarioType,
+        scenario_type: this.convUcScenarioType(o),
         desc: o.description.text,
       });
     }
@@ -243,7 +314,7 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
     const scenarioIds = ucAllScenario.scenarios.map(x => x.id.text);
     const scenarioFlowSection = new ScenarioFlowSection(ucAllScenario, uc);
     const scenarioFlows: IScenarioFlow[] = scenarioFlowSection.scenarioFlows;
-    const scenarioDts = genScenarioDTables(ucAllScenario, uc);
+    const scenarioDts = this.generateScenarioDTables(ucAllScenario, uc);
     // v-data-table のデータは、headers に無くて、items にだけあるプロパティは、
     // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
     // ヘッダー構成に出力しないようにする。
@@ -341,68 +412,6 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
           <v-toolbar class="mb-2" color="indigo" dark flat>
             <v-toolbar-title>ユースケーステスト</v-toolbar-title>
           </v-toolbar>
-        </v-row>
-        <v-row v-for="scenario_dt in app.scenario_dtables" :key="rowIndex">
-          <v-col cols="12">
-            <v-card>
-              <v-card-text>テスト手順</v-card-subtitle>
-              <v-card-title class="text-h6">
-              </v-card-title>
-              <v-card-subtitle></v-card-subtitle>
-              <v-card-text>
-                <v-data-table dense :items="scenario_dt.items" :disable-sort="true" class="app-vert-stripes" fixed-header
-                  disable-pagination hide-default-footer>
-
-                  <template v-slot:header>
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>操作</th>
-                        <th>因子</th>
-                        <th>水準</th>
-                        <th class="app-rule" :class="[
-                          ruleNo%2==1 ? 'app-odd': 'app-even',
-                          ruleNo == (selectedRuleIndex+1) ? 'app-rule-selected': '',
-                        ]" v-for="ruleNo of scenario_dt.countOfRules">{{ ruleNo }}</th>
-                      </tr>
-                    </thead>
-                  </template>
-
-                  <template v-slot:body="{ items }">
-                    <tbody>
-                      <tr v-for="(item, rowIndex) in items" :key="rowIndex">
-                        <td>{{ item.step_id }}</td>
-                        <td>{{ item.operation_desc }}</td>
-                        <td>{{ item.factor_desc }}</td>
-                        <td>{{ item.factor_select_item }}</td>
-                        <td
-                          class="app-rule"
-                          :class="[
-                            i%2==0 ? 'app-odd': 'app-even',
-                            i == selectedRuleIndex ? 'app-rule-selected': '',
-                          ]"
-                          v-for="(choice, i) in item.factor_select_rules"
-                          v-on:mouseover="onRule(i, rowIndex)"
-                          v-on:mouseleave="onRule(-1, rowIndex)"
-                          >{{ choice }}</td>
-                      </tr>
-                      <tr>
-                        <th>ID</th>
-                        <th>操作</th>
-                        <th>因子</th>
-                        <th>選択肢</th>
-                        <th class="app-rule" :class="[
-                          ruleNo%2==1 ? 'app-odd': 'app-even',
-                          ruleNo == (selectedRuleIndex+1) ? 'app-rule-selected': '',
-                        ]" v-for="ruleNo of app.countOfStepRules">{{ ruleNo }}</th>
-                      </tr>
-                    </tbody>
-                  </template>
-
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-col>
         </v-row>
         <v-row>
           <v-col cols="12">
@@ -509,6 +518,70 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
                   </template>
 
                   </v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <v-row v-for="scenario_dt in app.scenario_dtables" :key="rowIndex">
+          <v-col cols="12">
+            <v-card>
+              <v-card-text>テスト手順</v-card-subtitle>
+              <v-card-title class="text-h6">
+              {{ scenario_dt.valiation_id }} ＞ {{ scenario_dt.scenario_id }}
+              </v-card-title>
+              <v-card-subtitle>
+                テストに使用するデータ: [{{ scenario_dt.valiation_id }}] {{ scenario_dt.valiation_title }}<br/>
+                テストを実施するフロー: [{{ scenario_dt.scenario_id }}] {{ scenario_dt.scenario_type }} / {{ scenario_dt.scenario_title }}
+              </v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :items="scenario_dt.items" :disable-sort="true" class="app-vert-stripes" fixed-header
+                  disable-pagination hide-default-footer>
+
+                  <template v-slot:header>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>事前条件・手順</th>
+                        <th>期待値</th>
+                        <th>因子</th>
+                        <th>水準</th>
+                        <th class="app-rule" :class="[
+                          ruleNo%2==1 ? 'app-odd': 'app-even',
+                          ruleNo == (selectedRuleIndex+1) ? 'app-rule-selected': '',
+                        ]" v-for="ruleNo of scenario_dt.countOfRules">{{ ruleNo }}</th>
+                      </tr>
+                    </thead>
+                  </template>
+
+                  <template v-slot:body="{ items }">
+                    <tbody>
+                      <tr v-for="(item, rowIndex) in items" :key="rowIndex">
+                        <template v-if="item.step_colspan == 1">
+                          <td>{{ item.step_id }}</td>
+                          <td>{{ item.operation_desc }}</td>
+                          <td>{{ item.expected_desc }}</td>
+                          <td :colspan="item.factor_colspan">{{ item.factor_desc }}</td>
+                          <td v-if="item.factor_colspan != 2">{{ item.factor_select_item }}</td>
+                          <td
+                            class="app-rule"
+                            :class="[
+                              i%2==0 ? 'app-odd': 'app-even',
+                              i == selectedRuleIndex ? 'app-rule-selected': '',
+                            ]"
+                            v-for="(choice, i) in item.factor_select_rules"
+                            v-on:mouseover="onRule(i, rowIndex)"
+                            v-on:mouseleave="onRule(-1, rowIndex)"
+                            >{{ choice }}</td>
+                        </template>
+                        <template v-if="item.step_colspan != 1">
+                          <th :colspan="item.step_colspan">{{ item.step_id }}</th>
+                        </template>
+                      </tr>
+                    </tbody>
+                  </template>
+
+                </v-data-table>
               </v-card-text>
             </v-card>
           </v-col>

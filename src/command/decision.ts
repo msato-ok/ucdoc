@@ -44,7 +44,7 @@ export class DecisionCommand extends AbstractSpecCommand {
         cols.push(' ');
       }
       prevFactorTitle = row.factor.id.text;
-      cols.push(row.item.text);
+      cols.push(row.level.text);
       for (const rule of row.rules) {
         if (rule == DTConditionRuleChoice.Yes) {
           cols.push('Y');
@@ -67,7 +67,7 @@ export class DecisionCommand extends AbstractSpecCommand {
       } else {
         cols.push(' ');
       }
-      cols.push(row.desc.text);
+      cols.push(row.result.desc.text);
       cols.push(' ');
       for (const rule of row.rules) {
         if (rule == DTResultRuleChoice.Check) {
