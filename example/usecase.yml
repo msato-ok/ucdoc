@@ -1,0 +1,140 @@
+# ユースケース
+usecases:
+  UC01:
+    name: 貸出本の予約する
+
+    # 概要
+    summary: |
+      Webで借りたい本を探して予約する
+
+    # 関連情報
+    relatedInfo: |
+      ${ビジネスルール/BR01}
+
+    # 事前条件
+    preConditions:
+      R01: ${会員} が登録されている
+      R02: ${蔵書} が登録されている
+
+    # 事後条件
+    postConditions:
+      P01:
+        description: ${蔵書} の貸出が予約されている
+        details:
+          P0101: ${貸出予約} が登録されている
+          P0102: ${在庫} の引当がされている
+          P0103: ${登録完了メール} が送信される
+
+    # 基本フロー
+    basicFlows:
+      B01:
+        playerId: U01
+        description: ${蔵書検索(画面)} で検索条件を入力し、検索を実行する
+      B02:
+        playerId: system
+        description: ${蔵書} を検索して一覧を表示する
+      B03:
+        playerId: U01
+        description: 予約する ${蔵書} を選択する
+      B04:
+        playerId: system
+        description: ${貸出予約登録(画面)} を表示する
+      B05:
+        playerId: U01
+        description: ${貸出予約} をエントリーする
+      B06:
+        playerId: system
+        description: ${貸出予約} を登録する
+      B07:
+        playerId: system
+        description: ${登録完了のメッセージ} を表示する
+      B08:
+        playerId: system
+        description: ${登録完了メール} を送信する
+
+    # 代替フロー
+    alternateFlows:
+      A01:
+        description: 検索条件にマッチする蔵書がない
+        override:
+          B02:
+            replaceFlows:
+              A0101:
+                playerId: system
+                description: ${検索条件にマッチする蔵書がない旨のエラーメッセージ} を表示する
+            returnFlowId: B01
+      A02:
+        description: 先にエントリーした人がいて予約が成立しなかった
+        override:
+          B07:
+            replaceFlows:
+              A0201:
+                playerId: system
+                description: ${先約があり予約できなかった旨のエラーメッセージ} を表示する
+            returnFlowId: B05
+
+    # 例外フロー
+    exceptionFlows:
+      E01:
+        description: ${会員} が無効になった
+        override:
+          B02:
+            replaceFlows:
+              E0201:
+                playerId: system
+                description: ${会員} が無効になったため ${システムエラー(画面)} を表示する
+
+    valiations:
+      V01:
+        description: 貸出予約の検証データ
+        factorEntryPoints:
+          B06:
+            factors:
+              - 在庫有無
+        pictConstraint: |
+
+        results:
+          VR0101:
+            description: 貸出予約される
+            arrow: { 在庫有無: [在庫あり] }
+            verificationPointIds: [P0101,P0102,P0103]
+          VR0102:
+            description: 予約できない
+            arrow: { 在庫有無: [在庫切れ] }
+            verificationPointIds: [A02]
+
+      V02:
+        description: 蔵書検索ヒット有無
+        factorEntryPoints:
+          B01:
+            factors:
+              - 蔵書検索での検索条件
+        pictConstraint: |
+
+        results:
+          VR0201:
+            description: 検索ヒットして貸出予約
+            arrow: { 蔵書検索での検索条件: [マッチする蔵書がある] }
+            verificationPointIds: [P01]
+          VR0202:
+            description: 検索ヒットしない
+            arrow: { 蔵書検索での検索条件: [マッチする蔵書がない] }
+            verificationPointIds: [A01]
+
+      V03:
+        description: 会員抹消のデータ
+        factorEntryPoints:
+          R01:
+            factors:
+              - 会員登録状態
+        pictConstraint: |
+
+        results:
+          VR0301:
+            description: 会員が有効なときは貸出予約可能
+            arrow: { 会員登録状態: [登録済] }
+            verificationPointIds: [P01]
+          VR0302:
+            description: 会員が無効化したときにエラーになる
+            arrow: { 会員登録状態: [登録抹消] }
+            verificationPointIds: [E01]
