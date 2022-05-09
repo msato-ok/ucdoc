@@ -93,15 +93,7 @@ interface IStep {
 }
 
 class ScenarioFlowSection {
-  private _scenarioFlows: IScenarioFlow[] = [];
-
-  constructor(private ucAllScenario: UcScenarioCollection, private uc: UseCase) {
-    this._init();
-  }
-
-  get scenarioFlows(): IScenarioFlow[] {
-    return this._scenarioFlows;
-  }
+  constructor(private ucAllScenario: UcScenarioCollection, private uc: UseCase) {}
 
   private _scenarioColums(flowOnScenarios: UcScenario[]): string[] {
     const cols = [];
@@ -115,8 +107,9 @@ class ScenarioFlowSection {
     return cols;
   }
 
-  private _init() {
+  generate(): IScenarioFlow[] {
     let branchFlow: AlternateFlow | ExceptionFlow | undefined = undefined;
+    const scenarioFlows: IScenarioFlow[] = [];
     for (const flow of this.ucAllScenario.flows) {
       let tooltips = '';
       const branchType = this.ucAllScenario.getBranchType(flow);
@@ -145,7 +138,7 @@ class ScenarioFlowSection {
       } else {
         throw new InvalidArgumentError(`unknown branchType: ${branchType}`);
       }
-      this._scenarioFlows.push({
+      scenarioFlows.push({
         flow_id: flow.id.text,
         on_scenario: this._scenarioColums(this.ucAllScenario.getScenariosByFLow(flow)),
         player_id: flow.player.id.text,
@@ -154,6 +147,7 @@ class ScenarioFlowSection {
         branch_type: branchType,
       });
     }
+    return scenarioFlows;
   }
 }
 
@@ -170,16 +164,6 @@ class VariationAndScenarioCollection {
 
   get data(): _IVariationAndScenario[] {
     return this._data;
-  }
-
-  getUcScenariosByValiation(valiation: Valiation): UcScenario[] {
-    const results = [];
-    for (const d of this._data) {
-      if (d.valiation == valiation) {
-        results.push(d.ucScenario);
-      }
-    }
-    return results;
   }
 
   add(ucDt: UcScenarioDecisionTable, ucScenario: UcScenario, valiation: Valiation) {
@@ -212,7 +196,8 @@ interface IDataVariationScenario {
   valiation_id: string;
   valiation_title: string;
   step_link: string;
-  factors_text: string;
+  factor: string;
+  level: string;
   scenario_used: string[];
 }
 
@@ -237,10 +222,8 @@ class DataVariationScenarioSection {
             valiation_id: valiation.id.text,
             valiation_title: valiation.description.text,
             step_link: '#' + convStepLink(valiation, datum.ucScenario),
-            factors_text: datum.ucDt.decisionTable
-              .getUsedFactorLevels()
-              .items.map(x => x.factor.id.text + ' = ' + x.level.text)
-              .join(', '),
+            factor: choice.factor.id.text,
+            level: choice.level.text,
             scenario_used: Array(ucAllScenario.scenarios.length).fill(' '),
           } as IDataVariationScenario;
           const sindex = ucAllScenario.indexOfScenario(datum.ucScenario);
@@ -443,7 +426,7 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
     const postConditions = nestCondition(uc.postConditions, 0);
     const scenarioIds = ucAllScenario.scenarios.map(x => x.id.text);
     const scenarioFlowSection = new ScenarioFlowSection(ucAllScenario, uc);
-    const scenarioFlows: IScenarioFlow[] = scenarioFlowSection.scenarioFlows;
+    const scenarioFlows: IScenarioFlow[] = scenarioFlowSection.generate();
     const variationAndScenarioCollection = makeVariationAndScenarioCollection(ucAllScenario, uc);
     const dataVariationScenarioSection = new DataVariationScenarioSection(variationAndScenarioCollection);
     const scenarioDTablesSection = new ScenarioDTablesSection(variationAndScenarioCollection);
@@ -673,7 +656,8 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
                       <tr>
                         <th>データID</th>
                         <th>説明</th>
-                        <th>因子水準</th>
+                        <th>因子</th>
+                        <th>水準</th>
                         <th v-for="sid in app.scenario_ids">
                           {{ sid }}
                         </th>
@@ -687,7 +671,8 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
                         <template>
                           <td>{{ item.valiation_id }}</td>
                           <td>{{ item.valiation_title }}</td>
-                          <td>{{ item.factors_text }}</td>
+                          <td>{{ item.factor }}</td>
+                          <td>{{ item.level }}</td>
                           <td v-for="(choice, i) in item.scenario_used"><a :href="item.step_link">{{ choice }}</a></td>
                         </template>
                       </tr>
