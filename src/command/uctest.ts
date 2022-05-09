@@ -21,8 +21,10 @@ import {
 } from '../spec/uc_scenario';
 import { AlternateFlow, ExceptionFlow } from '../spec/flow';
 import { DTConditionRuleChoice, DTResultRuleChoice } from '../spec/decision_table';
-import { PostCondition } from '../spec/prepostcondition';
+import { PostCondition, PrePostCondition } from '../spec/prepostcondition';
 import { Valiation } from '../spec/valiation';
+import { Actor } from '../spec/actor';
+import { Glossary } from '../spec/glossary';
 
 // ■ html属性に関する注意
 //
@@ -53,14 +55,10 @@ interface IPlayer {
   desc: string;
 }
 
-interface IPreCondition {
-  pre_condition_id: string;
+interface IPrePostCondition {
+  condition_id: string;
   desc: string;
-}
-
-interface IPostCondition {
-  post_condition_id: string;
-  desc: string;
+  //depth: number;
 }
 
 interface IScenarioFlow {
@@ -413,26 +411,36 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
       });
     }
     const players: IPlayer[] = [];
-    for (const o of uc.actors) {
-      players.push({
-        player_id: o.id.text,
-        desc: o.name.text,
-      });
+    for (const o of uc.players) {
+      if (o instanceof Actor) {
+        players.push({
+          player_id: o.id.text,
+          desc: o.name.text,
+        });
+      } else if (o instanceof Glossary) {
+        players.push({
+          player_id: o.id.text,
+          desc: o.text,
+        });
+      }
     }
-    const preConditions: IPreCondition[] = [];
-    for (const o of uc.preConditions) {
-      preConditions.push({
-        pre_condition_id: o.id.text,
-        desc: o.description.text,
-      });
-    }
-    const postConditions: IPostCondition[] = [];
-    for (const o of uc.postConditions) {
-      postConditions.push({
-        post_condition_id: o.id.text,
-        desc: o.description.text,
-      });
-    }
+    const nestCondition = (conditions: PrePostCondition[], depth: number): IPrePostCondition[] => {
+      let results: IPrePostCondition[] = [];
+      for (const o of conditions) {
+        results.push({
+          condition_id: '→'.repeat(depth) + o.id.text,
+          desc: o.description.text,
+          //depth: depth,
+        });
+        if (o.childNodes.length > 0) {
+          const childResults = nestCondition(o.childNodes, depth + 1);
+          results = results.concat(childResults);
+        }
+      }
+      return results;
+    };
+    const preConditions = nestCondition(uc.preConditions, 0);
+    const postConditions = nestCondition(uc.postConditions, 0);
     const scenarioIds = ucAllScenario.scenarios.map(x => x.id.text);
     const scenarioFlowSection = new ScenarioFlowSection(ucAllScenario, uc);
     const scenarioFlows: IScenarioFlow[] = scenarioFlowSection.scenarioFlows;
@@ -447,8 +455,7 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
       scenario_type: 'シナリオタイプ',
       desc: '説明',
       player_id: 'Player ID',
-      pre_condition_id: 'ID',
-      post_condition_id: 'ID',
+      condition_id: 'ID',
       flow_id: 'フローID',
       on_scenario: null,
       tooltips: null,
