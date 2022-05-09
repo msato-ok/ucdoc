@@ -233,6 +233,20 @@ export class FactorEntryPoint {
     return dst;
   }
 
+  containsChoice(factorChoice: FactorLevelChoice): boolean {
+    for (const factor of this.factors) {
+      if (!factorChoice.factor.equals(factor)) {
+        continue;
+      }
+      for (const level of factor.levels) {
+        if (!factorChoice.level.equals(level)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   getEntryPointByFactor(factor: Factor): EntryPoint | undefined {
     return this._factors.get(factor);
   }

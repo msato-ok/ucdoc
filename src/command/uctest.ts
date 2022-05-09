@@ -6,7 +6,12 @@ import ejs from 'ejs';
 import fs from 'fs';
 import path from 'path';
 import { UseCase } from '../spec/usecase';
-import { UcScenarioDecisionTableFactory, UcScenarioStep, UcScenarioStepType } from '../spec/uc_scenario_dt';
+import {
+  UcScenarioDecisionTableFactory,
+  UcScenarioDecisionTable,
+  UcScenarioStep,
+  UcScenarioStepType,
+} from '../spec/uc_scenario_dt';
 import {
   UcScenarioCollectionFactory,
   UcScenarioCollection,
@@ -17,6 +22,7 @@ import {
 import { AlternateFlow, ExceptionFlow } from '../spec/flow';
 import { DTConditionRuleChoice, DTResultRuleChoice } from '../spec/decision_table';
 import { PostCondition } from '../spec/prepostcondition';
+import { Valiation } from '../spec/valiation';
 
 // ■ html属性に関する注意
 //
@@ -72,6 +78,7 @@ interface IScenarioDTable {
   scenario_id: string;
   scenario_title: string;
   scenario_type: string;
+  step_link: string;
   countOfRules: number;
   items: IStep[];
 }
@@ -90,15 +97,15 @@ interface IStep {
 class ScenarioFlowSection {
   private _scenarioFlows: IScenarioFlow[] = [];
 
+  constructor(private ucAllScenario: UcScenarioCollection, private uc: UseCase) {
+    this._init();
+  }
+
   get scenarioFlows(): IScenarioFlow[] {
     return this._scenarioFlows;
   }
 
-  constructor(private ucAllScenario: UcScenarioCollection, private uc: UseCase) {
-    this.init();
-  }
-
-  private scenarioColums(flowOnScenarios: UcScenario[]): string[] {
+  private _scenarioColums(flowOnScenarios: UcScenario[]): string[] {
     const cols = [];
     for (const horzScenario of this.ucAllScenario.scenarios) {
       if (entityContains(flowOnScenarios, horzScenario)) {
@@ -110,7 +117,7 @@ class ScenarioFlowSection {
     return cols;
   }
 
-  private init() {
+  private _init() {
     let branchFlow: AlternateFlow | ExceptionFlow | undefined = undefined;
     for (const flow of this.ucAllScenario.flows) {
       let tooltips = '';
@@ -142,7 +149,7 @@ class ScenarioFlowSection {
       }
       this._scenarioFlows.push({
         flow_id: flow.id.text,
-        on_scenario: this.scenarioColums(this.ucAllScenario.getScenariosByFLow(flow)),
+        on_scenario: this._scenarioColums(this.ucAllScenario.getScenariosByFLow(flow)),
         player_id: flow.player.id.text,
         desc: flow.description.text,
         tooltips: tooltips,
@@ -150,6 +157,241 @@ class ScenarioFlowSection {
       });
     }
   }
+}
+
+interface _IVariationAndScenario {
+  ucDt: UcScenarioDecisionTable;
+  ucScenario: UcScenario;
+  valiation: Valiation;
+}
+
+class VariationAndScenarioCollection {
+  private _data: _IVariationAndScenario[] = [];
+
+  constructor(readonly ucAllScenario: UcScenarioCollection, readonly uc: UseCase) {}
+
+  get data(): _IVariationAndScenario[] {
+    return this._data;
+  }
+
+  getUcScenariosByValiation(valiation: Valiation): UcScenario[] {
+    const results = [];
+    for (const d of this._data) {
+      if (d.valiation == valiation) {
+        results.push(d.ucScenario);
+      }
+    }
+    return results;
+  }
+
+  add(ucDt: UcScenarioDecisionTable, ucScenario: UcScenario, valiation: Valiation) {
+    this._data.push({
+      ucDt: ucDt,
+      ucScenario: ucScenario,
+      valiation: valiation,
+    });
+  }
+}
+
+function makeVariationAndScenarioCollection(
+  ucAllScenario: UcScenarioCollection,
+  uc: UseCase
+): VariationAndScenarioCollection {
+  const data: VariationAndScenarioCollection = new VariationAndScenarioCollection(ucAllScenario, uc);
+  for (const valiation of uc.valiations) {
+    for (const ucScenario of ucAllScenario.scenarios) {
+      const ucDt = UcScenarioDecisionTableFactory.getInstance(ucScenario, valiation, uc.preConditions);
+      if (!ucDt) {
+        continue;
+      }
+      data.add(ucDt, ucScenario, valiation);
+    }
+  }
+  return data;
+}
+
+interface IDataVariationScenario {
+  valiation_id: string;
+  valiation_title: string;
+  step_link: string;
+  factors_text: string;
+  scenario_used: string[];
+}
+
+class DataVariationScenarioSection {
+  constructor(private variationAndScenarioCollection: VariationAndScenarioCollection) {}
+
+  generate(): IDataVariationScenario[] {
+    const results: IDataVariationScenario[] = [];
+    const ucAllScenario = this.variationAndScenarioCollection.ucAllScenario;
+    let prevLine = {
+      valiation_id: '',
+      valiation_title: '',
+    } as IDataVariationScenario;
+    for (const datum of this.variationAndScenarioCollection.data) {
+      const choices = datum.ucDt.decisionTable.getUsedFactorLevels().items;
+      for (const choice of choices) {
+        for (const valiation of this.variationAndScenarioCollection.uc.valiations) {
+          if (!valiation.factorEntryPoint.containsChoice(choice)) {
+            continue;
+          }
+          const dataSchenario = {
+            valiation_id: valiation.id.text,
+            valiation_title: valiation.description.text,
+            step_link: '#' + convStepLink(valiation, datum.ucScenario),
+            factors_text: datum.ucDt.decisionTable
+              .getUsedFactorLevels()
+              .items.map(x => x.factor.id.text + ' = ' + x.level.text)
+              .join(', '),
+            scenario_used: Array(ucAllScenario.scenarios.length).fill(' '),
+          } as IDataVariationScenario;
+          const sindex = ucAllScenario.indexOfScenario(datum.ucScenario);
+          dataSchenario.scenario_used[sindex] = '○';
+          if (prevLine.valiation_id == dataSchenario.valiation_id) {
+            dataSchenario.valiation_id = '';
+          }
+          if (prevLine.valiation_title == dataSchenario.valiation_title) {
+            dataSchenario.valiation_title = '';
+          }
+          results.push(dataSchenario);
+          prevLine = dataSchenario;
+          break;
+        }
+      }
+    }
+    return results;
+  }
+}
+
+class ScenarioDTablesSection {
+  private _prevJson: IStep = {} as IStep;
+
+  constructor(private variationAndScenarioCollection: VariationAndScenarioCollection) {}
+
+  genarate(): IScenarioDTable[] {
+    const results: IScenarioDTable[] = [];
+    this._prevJson = this._newStepJson('', 0);
+    for (const datum of this.variationAndScenarioCollection.data) {
+      const ucDt = datum.ucDt;
+      const ucDtJson = {
+        valiation_id: datum.valiation.id.text,
+        valiation_title: datum.valiation.description.text,
+        scenario_id: datum.ucScenario.id.text,
+        scenario_title: datum.ucScenario.description.text,
+        scenario_type: convUcScenarioType(datum.ucScenario),
+        step_link: convStepLink(datum.valiation, datum.ucScenario),
+        countOfRules: ucDt.countOfRules,
+        items: [],
+      } as IScenarioDTable;
+      this._prevJson = this._newStepJson('', ucDt.countOfRules);
+      this._appendStepHeader('【事前条件】', ucDt.countOfRules, ucDtJson);
+      for (const step of ucDt.preConditionSteps) {
+        const stepJson = this._newStepJson(step.id.text, ucDt.countOfRules);
+        stepJson.operation_desc = step.entryPoint.description.text;
+        this._updateConditionRow(stepJson, step);
+        this._eraseSameTextAsPrevLine(stepJson);
+        ucDtJson.items.push(stepJson);
+      }
+      this._appendStepHeader('【手順】', ucDt.countOfRules, ucDtJson);
+      for (const step of ucDt.steps) {
+        const stepJson = this._newStepJson(step.id.text, ucDt.countOfRules);
+        if (step.stepType == UcScenarioStepType.ActorOperation) {
+          stepJson.operation_desc = step.entryPoint.description.text;
+        } else if (step.stepType == UcScenarioStepType.Expected) {
+          stepJson.expected_desc = step.entryPoint.description.text;
+        }
+        this._updateConditionRow(stepJson, step);
+        this._eraseSameTextAsPrevLine(stepJson);
+        ucDtJson.items.push(stepJson);
+      }
+      let resultHeader = false;
+      for (const resultRow of ucDt.decisionTable.resultRows) {
+        for (const vp of resultRow.result.verificationPoints) {
+          if (!(vp instanceof PostCondition)) {
+            continue;
+          }
+          if (!resultHeader) {
+            this._appendStepHeader('【事後条件】', ucDt.countOfRules, ucDtJson);
+            resultHeader = true;
+          }
+          const stepJson = this._newStepJson(vp.id.text, ucDt.countOfRules);
+          stepJson.expected_desc = resultRow.result.desc.text;
+          stepJson.factor_select_rules = resultRow.rules.map(x =>
+            x == DTResultRuleChoice.Check ? 'X' : x == DTResultRuleChoice.None ? ' ' : '不明'
+          );
+          stepJson.factor_desc = vp.description.text;
+          stepJson.factor_colspan = 2;
+          this._eraseSameTextAsPrevLine(stepJson);
+          ucDtJson.items.push(stepJson);
+        }
+      }
+      results.push(ucDtJson);
+    }
+    return results;
+  }
+
+  private _newStepJson(stepIdText: string, countOfRules: number): IStep {
+    return {
+      step_colspan: 1,
+      step_id: stepIdText,
+      operation_desc: '',
+      expected_desc: '',
+      factor_desc: '',
+      factor_select_item: '',
+      factor_select_rules: Array(countOfRules).fill(' '),
+      factor_colspan: 1,
+    } as IStep;
+  }
+
+  private _appendStepHeader(headText: string, countOfRules: number, ucDtJson: IScenarioDTable) {
+    const header = this._newStepJson(headText, countOfRules);
+    header.step_colspan = 5 + countOfRules;
+    ucDtJson.items.push(header);
+    this._prevJson = this._newStepJson(headText, countOfRules);
+  }
+
+  private _updateConditionRow(stepJson: IStep, step: UcScenarioStep) {
+    if (step.conditionRow) {
+      const conditionRow = step.conditionRow;
+      stepJson.factor_desc = conditionRow.factor.name.text;
+      stepJson.factor_select_item = conditionRow.level.text;
+      stepJson.factor_select_rules = conditionRow.rules.map(x =>
+        x == DTConditionRuleChoice.Yes ? 'Y' : x == DTConditionRuleChoice.No ? 'N' : ' '
+      );
+    }
+  }
+
+  private _eraseSameTextAsPrevLine(stepJson: IStep) {
+    if (this._prevJson.operation_desc == stepJson.operation_desc) {
+      stepJson.operation_desc = '';
+    } else {
+      this._prevJson.operation_desc = stepJson.operation_desc;
+    }
+    if (this._prevJson.expected_desc == stepJson.expected_desc) {
+      stepJson.expected_desc = '';
+    } else {
+      this._prevJson.expected_desc = stepJson.expected_desc;
+    }
+    if (this._prevJson.factor_desc == stepJson.factor_desc) {
+      stepJson.factor_desc = '';
+    } else {
+      this._prevJson.factor_desc = stepJson.factor_desc;
+    }
+  }
+}
+
+function convUcScenarioType(ucScenario: UcScenario): string {
+  return ucScenario.ucScenarioType == UcScenarioType.BasicFlowScenario
+    ? '基本フローの検証'
+    : ucScenario.ucScenarioType == UcScenarioType.AlternateFlowScenario
+    ? `代替フロー(${ucScenario.altExFlow?.id.text})の検証`
+    : ucScenario.ucScenarioType == UcScenarioType.ExceptionFlowScenario
+    ? `例外フロー(${ucScenario.altExFlow?.id.text})の検証`
+    : '不明';
+}
+
+function convStepLink(valiation: Valiation, ucScenario: UcScenario): string {
+  return valiation.id.text + '_' + ucScenario.id.text;
 }
 
 export class UsecaseTestCommand extends AbstractSpecCommand {
@@ -161,132 +403,12 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
     });
   }
 
-  private generateScenarioDTables(ucAllScenario: UcScenarioCollection, uc: UseCase): IScenarioDTable[] {
-    const ucDtJsons: IScenarioDTable[] = [];
-    for (const valiation of uc.valiations) {
-      for (const ucScenario of ucAllScenario.scenarios) {
-        const ucDt = UcScenarioDecisionTableFactory.getInstance(ucScenario, valiation, uc.preConditions);
-        if (!ucDt) {
-          continue;
-        }
-        const ucDtJson = {
-          valiation_id: valiation.id.text,
-          valiation_title: valiation.description.text,
-          scenario_id: ucScenario.id.text,
-          scenario_title: ucScenario.description.text,
-          scenario_type: this.convUcScenarioType(ucScenario),
-          countOfRules: ucDt.countOfRules,
-          items: [],
-        } as IScenarioDTable;
-        const newStepJson = (stepIdText: string): IStep => {
-          return {
-            step_colspan: 1,
-            step_id: stepIdText,
-            operation_desc: '',
-            expected_desc: '',
-            factor_desc: '',
-            factor_select_item: '',
-            factor_select_rules: Array(ucDt.countOfRules).fill(' '),
-            factor_colspan: 1,
-          } as IStep;
-        };
-        let prevJson = newStepJson('');
-        const appendStepHeader = (headText: string) => {
-          const header = newStepJson(headText);
-          header.step_colspan = 5 + ucDt.countOfRules;
-          ucDtJson.items.push(header);
-          prevJson = newStepJson(headText);
-        };
-        const updateConditionRow = (stepJson: IStep, step: UcScenarioStep) => {
-          if (step.conditionRow) {
-            const conditionRow = step.conditionRow;
-            stepJson.factor_desc = conditionRow.factor.name.text;
-            stepJson.factor_select_item = conditionRow.level.text;
-            stepJson.factor_select_rules = conditionRow.rules.map(x =>
-              x == DTConditionRuleChoice.Yes ? 'Y' : x == DTConditionRuleChoice.No ? 'N' : ' '
-            );
-          }
-        };
-        const eraseSameTextAsPrevLine = (stepJson: IStep) => {
-          if (prevJson.operation_desc == stepJson.operation_desc) {
-            stepJson.operation_desc = '';
-          } else {
-            prevJson.operation_desc = stepJson.operation_desc;
-          }
-          if (prevJson.expected_desc == stepJson.expected_desc) {
-            stepJson.expected_desc = '';
-          } else {
-            prevJson.expected_desc = stepJson.expected_desc;
-          }
-          if (prevJson.factor_desc == stepJson.factor_desc) {
-            stepJson.factor_desc = '';
-          } else {
-            prevJson.factor_desc = stepJson.factor_desc;
-          }
-        };
-        appendStepHeader('【事前条件】');
-        for (const step of ucDt.preConditionSteps) {
-          const stepJson = newStepJson(step.id.text);
-          stepJson.operation_desc = step.entryPoint.description.text;
-          updateConditionRow(stepJson, step);
-          eraseSameTextAsPrevLine(stepJson);
-          ucDtJson.items.push(stepJson);
-        }
-        appendStepHeader('【手順】');
-        for (const step of ucDt.steps) {
-          const stepJson = newStepJson(step.id.text);
-          if (step.stepType == UcScenarioStepType.ActorOperation) {
-            stepJson.operation_desc = step.entryPoint.description.text;
-          } else if (step.stepType == UcScenarioStepType.Expected) {
-            stepJson.expected_desc = step.entryPoint.description.text;
-          }
-          updateConditionRow(stepJson, step);
-          eraseSameTextAsPrevLine(stepJson);
-          ucDtJson.items.push(stepJson);
-        }
-        let resultHeader = false;
-        for (const resultRow of ucDt.decisionTable.resultRows) {
-          for (const vp of resultRow.result.verificationPoints) {
-            if (!(vp instanceof PostCondition)) {
-              continue;
-            }
-            if (!resultHeader) {
-              appendStepHeader('【事後条件】');
-              resultHeader = true;
-            }
-            const stepJson = newStepJson(vp.id.text);
-            stepJson.expected_desc = resultRow.result.desc.text;
-            stepJson.factor_select_rules = resultRow.rules.map(x =>
-              x == DTResultRuleChoice.Check ? 'X' : x == DTResultRuleChoice.None ? ' ' : '不明'
-            );
-            stepJson.factor_desc = vp.description.text;
-            stepJson.factor_colspan = 2;
-            eraseSameTextAsPrevLine(stepJson);
-            ucDtJson.items.push(stepJson);
-          }
-        }
-        ucDtJsons.push(ucDtJson);
-      }
-    }
-    return ucDtJsons;
-  }
-
-  private convUcScenarioType(ucScenario: UcScenario): string {
-    return ucScenario.ucScenarioType == UcScenarioType.BasicFlowScenario
-      ? '基本フローの検証'
-      : ucScenario.ucScenarioType == UcScenarioType.AlternateFlowScenario
-      ? `代替フロー(${ucScenario.altExFlow?.id.text})の検証`
-      : ucScenario.ucScenarioType == UcScenarioType.ExceptionFlowScenario
-      ? `例外フロー(${ucScenario.altExFlow?.id.text})の検証`
-      : '不明';
-  }
-
   private assembleData(ucAllScenario: UcScenarioCollection, uc: UseCase): string {
     const scenarios: IScenario[] = [];
     for (const o of ucAllScenario.scenarios) {
       scenarios.push({
         scenario_id: o.id.text,
-        scenario_type: this.convUcScenarioType(o),
+        scenario_type: convUcScenarioType(o),
         desc: o.description.text,
       });
     }
@@ -314,7 +436,9 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
     const scenarioIds = ucAllScenario.scenarios.map(x => x.id.text);
     const scenarioFlowSection = new ScenarioFlowSection(ucAllScenario, uc);
     const scenarioFlows: IScenarioFlow[] = scenarioFlowSection.scenarioFlows;
-    const scenarioDts = this.generateScenarioDTables(ucAllScenario, uc);
+    const variationAndScenarioCollection = makeVariationAndScenarioCollection(ucAllScenario, uc);
+    const dataVariationScenarioSection = new DataVariationScenarioSection(variationAndScenarioCollection);
+    const scenarioDTablesSection = new ScenarioDTablesSection(variationAndScenarioCollection);
     // v-data-table のデータは、headers に無くて、items にだけあるプロパティは、
     // 表にはレンダリングされないので、表出対象以外のデータのヘッダーは null にしておいて
     // ヘッダー構成に出力しないようにする。
@@ -365,7 +489,8 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
       },
       scenario_ids: scenarioIds,
       scenario_flows: scenarioFlows,
-      scenario_dtables: scenarioDts,
+      data_scenarios: dataVariationScenarioSection.generate(),
+      scenario_dtables: scenarioDTablesSection.genarate(),
       uc: uc,
     });
   }
@@ -523,12 +648,58 @@ export class UsecaseTestCommand extends AbstractSpecCommand {
           </v-col>
         </v-row>
 
+        <v-row>
+          <v-col cols="12">
+            <v-card>
+              <v-card-title class="text-h6">
+                テストデータ
+              </v-card-title>
+              <v-card-subtitle>
+                テストに使用するデータとテストを実施するフローの組み合わせ
+              </v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :items="app.data_scenarios" :disable-sort="true" class="app-vert-stripes" fixed-header
+                  disable-pagination hide-default-footer>
+
+                  <template v-slot:header>
+                    <thead>
+                      <tr>
+                        <th>データID</th>
+                        <th>説明</th>
+                        <th>因子水準</th>
+                        <th v-for="sid in app.scenario_ids">
+                          {{ sid }}
+                        </th>
+                      </tr>
+                    </thead>
+                  </template>
+
+                  <template v-slot:body="{ items }">
+                    <tbody>
+                      <tr v-for="(item, rowIndex) in items" :key="rowIndex">
+                        <template>
+                          <td>{{ item.valiation_id }}</td>
+                          <td>{{ item.valiation_title }}</td>
+                          <td>{{ item.factors_text }}</td>
+                          <td v-for="(choice, i) in item.scenario_used"><a :href="item.step_link">{{ choice }}</a></td>
+                        </template>
+                      </tr>
+                    </tbody>
+                  </template>
+
+                </v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
         <v-row v-for="scenario_dt in app.scenario_dtables" :key="rowIndex">
+          <a :name="scenario_dt.step_link"></a>
           <v-col cols="12">
             <v-card>
               <v-card-text>テスト手順</v-card-subtitle>
               <v-card-title class="text-h6">
-              {{ scenario_dt.valiation_id }} ＞ {{ scenario_dt.scenario_id }}
+                {{ scenario_dt.valiation_id }} ＞ {{ scenario_dt.scenario_id }}
               </v-card-title>
               <v-card-subtitle>
                 テストに使用するデータ: [{{ scenario_dt.valiation_id }}] {{ scenario_dt.valiation_title }}<br/>
