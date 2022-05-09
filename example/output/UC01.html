@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+  <link href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <style>
+    /* テストシナリオフローの表に縦線を入れる */
+    #test-scenario-flow table td,
+    #test-scenario-flow table th {
+      border-left: thin solid rgba(0, 0, 0, .12);
+      /* 横線を消す */
+      /*border-bottom: none;*/
+    }
+    /* 表の外枠線を描く */
+    #test-scenario-flow table {
+      border-top: thin solid rgba(0, 0, 0, .12);
+      border-bottom: thin solid rgba(0, 0, 0, .12);
+      border-right: thin solid rgba(0, 0, 0, .12);
+    }
+    /* テスト手順の表の偶数列をグレーにする */
+    #test-scenario-flow table td:nth-child(2n),
+    #test-scenario-flow table th:nth-child(2n) {
+      background-color: #EEEEEE;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <!-- https://vuetifyjs.com/ja/introduction/why-vuetify/ -->
+    <v-app>
+      <v-container fluid>
+        <v-row class="app_toolbar__wrapper">
+          <v-toolbar class="mb-2" color="indigo" dark flat>
+            <v-toolbar-title>ユースケーステスト</v-toolbar-title>
+          </v-toolbar>
+        </v-row>
+        <v-row>
+          <v-col cols="12">
+            <v-card>
+              <v-card-title class="text-h6">
+                テストシナリオ
+              </v-card-title>
+              <v-card-subtitle>ユースケースのフローの分岐を網羅します。</v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :headers="app.scenario.headers" :items="app.scenario.items" :disable-sort="true"
+                  disable-pagination hide-default-footer></v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col cols="4">
+            <v-card>
+              <v-card-title class="text-h6">
+                Player
+              </v-card-title>
+              <v-card-subtitle>テストに登場するアクターとシステム</v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :headers="app.player.headers" :items="app.player.items" :disable-sort="true"
+                  disable-pagination hide-default-footer></v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="4">
+            <v-card>
+              <v-card-title class="text-h6">
+                事前条件
+              </v-card-title>
+              <v-card-subtitle></v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :headers="app.pre_condition.headers" :items="app.pre_condition.items" :disable-sort="true"
+                  fixed-header disable-pagination hide-default-footer></v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="4">
+            <v-card>
+              <v-card-title class="text-h6">
+                事後条件
+              </v-card-title>
+              <v-card-subtitle></v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :headers="app.post_condition.headers" :items="app.post_condition.items" :disable-sort="true"
+                  fixed-header disable-pagination hide-default-footer></v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col cols="12">
+            <v-card id="test-scenario-flow">
+              <v-card-title class="text-h6">
+                テストシナリオのフロー
+              </v-card-title>
+              <v-card-subtitle>○のついたフローを縦方向に進めてください</v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :items="app.scenario_flows" :disable-sort="true" fixed-header
+                  disable-pagination hide-default-footer>
+
+                  <template v-slot:header="{ headers }">
+                    <thead>
+                      <tr>
+                        <th>フローID</th>
+                        <th v-for="sid in app.scenario_ids">
+                          {{ sid }}
+                        </th>
+                        <th>Player ID</th>
+                        <th>説明</th>
+                      </tr>
+                    </thead>
+                  </template>
+
+                  <template v-slot:body="{ items }">
+                    <tbody>
+                      <tr v-for="item in items" :key="item.flow_id">
+                        <td>
+                          {{ item.flow_id }}
+                        </td>
+                        <td v-for="on in item.on_scenario">{{ on }}</td>
+                        <td>{{ item.player_id }}</td>
+                        <td>
+
+                          <div>
+                            <span v-if="item.tooltips != ''">
+                              <v-icon v-if="item.branch_type == 'branch'" v-bind="attrs" v-on="on">mdi-arrow-right-thick
+                              </v-icon>
+                              <v-icon v-if="item.branch_type == 'alt'" v-bind="attrs" v-on="on" color="green darken-2">
+                                mdi-arrow-right-thick</v-icon>
+                              <v-icon v-if="item.branch_type == 'ex'" v-bind="attrs" v-on="on" color="orange darken-5">
+                                mdi-arrow-right-thick</v-icon>
+                            </span>
+                            {{ item.tooltips }}
+                          </div>
+                          <div>{{ item.desc }}</div>
+
+                        </td>
+                      </tr>
+                    </tbody>
+                  </template>
+
+                  </v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <v-row>
+          <v-col cols="12">
+            <v-card>
+              <v-card-title class="text-h6">
+                テストデータ
+              </v-card-title>
+              <v-card-subtitle>
+                テストに使用するデータとテストを実施するフローの組み合わせ
+              </v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :items="app.data_scenarios" :disable-sort="true" class="app-vert-stripes" fixed-header
+                  disable-pagination hide-default-footer>
+
+                  <template v-slot:header>
+                    <thead>
+                      <tr>
+                        <th>データID</th>
+                        <th>説明</th>
+                        <th>因子水準</th>
+                        <th v-for="sid in app.scenario_ids">
+                          {{ sid }}
+                        </th>
+                      </tr>
+                    </thead>
+                  </template>
+
+                  <template v-slot:body="{ items }">
+                    <tbody>
+                      <tr v-for="(item, rowIndex) in items" :key="rowIndex">
+                        <template>
+                          <td>{{ item.valiation_id }}</td>
+                          <td>{{ item.valiation_title }}</td>
+                          <td>{{ item.factors_text }}</td>
+                          <td v-for="(choice, i) in item.scenario_used"><a :href="item.step_link">{{ choice }}</a></td>
+                        </template>
+                      </tr>
+                    </tbody>
+                  </template>
+
+                </v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <v-row v-for="scenario_dt in app.scenario_dtables" :key="rowIndex">
+          <a :name="scenario_dt.step_link"></a>
+          <v-col cols="12">
+            <v-card>
+              <v-card-text>テスト手順</v-card-subtitle>
+              <v-card-title class="text-h6">
+                {{ scenario_dt.valiation_id }} ＞ {{ scenario_dt.scenario_id }}
+              </v-card-title>
+              <v-card-subtitle>
+                テストに使用するデータ: [{{ scenario_dt.valiation_id }}] {{ scenario_dt.valiation_title }}<br/>
+                テストを実施するフロー: [{{ scenario_dt.scenario_id }}] {{ scenario_dt.scenario_type }} / {{ scenario_dt.scenario_title }}
+              </v-card-subtitle>
+              <v-card-text>
+                <v-data-table dense :items="scenario_dt.items" :disable-sort="true" class="app-vert-stripes" fixed-header
+                  disable-pagination hide-default-footer>
+
+                  <template v-slot:header>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>事前条件・手順</th>
+                        <th>期待値</th>
+                        <th>因子</th>
+                        <th>水準</th>
+                        <th class="app-rule" :class="[
+                          ruleNo%2==1 ? 'app-odd': 'app-even',
+                          ruleNo == (selectedRuleIndex+1) ? 'app-rule-selected': '',
+                        ]" v-for="ruleNo of scenario_dt.countOfRules">{{ ruleNo }}</th>
+                      </tr>
+                    </thead>
+                  </template>
+
+                  <template v-slot:body="{ items }">
+                    <tbody>
+                      <tr v-for="(item, rowIndex) in items" :key="rowIndex">
+                        <template v-if="item.step_colspan == 1">
+                          <td>{{ item.step_id }}</td>
+                          <td>{{ item.operation_desc }}</td>
+                          <td>{{ item.expected_desc }}</td>
+                          <td :colspan="item.factor_colspan">{{ item.factor_desc }}</td>
+                          <td v-if="item.factor_colspan != 2">{{ item.factor_select_item }}</td>
+                          <td
+                            class="app-rule"
+                            :class="[
+                              i%2==0 ? 'app-odd': 'app-even',
+                              i == selectedRuleIndex ? 'app-rule-selected': '',
+                            ]"
+                            v-for="(choice, i) in item.factor_select_rules"
+                            v-on:mouseover="onRule(i, rowIndex)"
+                            v-on:mouseleave="onRule(-1, rowIndex)"
+                            >{{ choice }}</td>
+                        </template>
+                        <template v-if="item.step_colspan != 1">
+                          <th :colspan="item.step_colspan">{{ item.step_id }}</th>
+                        </template>
+                      </tr>
+                    </tbody>
+                  </template>
+
+                </v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+      </v-container>
+    </v-app>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+  <script>
+    new Vue({
+      el: '#app',
+      vuetify: new Vuetify({
+        icons: {
+          iconfont: 'fa',
+        },
+      }),
+      mounted() {
+        // window.addEventListener('resize', this.onResize);
+        // this.onResize();
+      },
+      unmounted() {
+        // window.removeEventListener('resize', this.onResize);
+      },
+      methods: {
+        onRule(index, rowIndex) {
+          this.selectedRuleIndex = index;
+          var factorRowIndexs = [];
+          var itemRowIndexs = [];
+          if (index >= 0) {
+            var items = this.app.dt.items;
+            items.forEach((item, rowIndex) => {
+              item.choice.forEach((c, colIndex) => {
+                if (colIndex == index && (c == 'Y' || c == 'X')) {
+                  itemRowIndexs.push(rowIndex);
+                  var factorIndex = rowIndex;
+                  for (; factorIndex >= 0; factorIndex--) {
+                    if (items[factorIndex].factor_or_result.length > 0) {
+                      break;
+                    }
+                  }
+                  factorRowIndexs.push(factorIndex);
+                }
+              });
+            });
+          }
+          this.selectedFactorRowIndexs = factorRowIndexs;
+          this.selectedItemRowIndexs = itemRowIndexs;
+        },
+      },
+      data() {
+        return {
+          selectedRuleIndex: -1,
+          selectedFactorRowIndexs: [],
+          selectedItemRowIndexs: [],
+          app: {"scenario":{"headers":[{"value":"scenario_id","text":"シナリオID"},{"value":"scenario_type","text":"シナリオタイプ"},{"value":"desc","text":"説明"}],"items":[{"scenario_id":"TP01","scenario_type":"基本フローの検証","desc":"正常に実行されて事後条件が成立する状態の検証"},{"scenario_id":"TP02","scenario_type":"代替フロー(A01)の検証","desc":"検索条件にマッチする蔵書がない"},{"scenario_id":"TP03","scenario_type":"代替フロー(A02)の検証","desc":"先にエントリーした人がいて予約が成立しなかった"},{"scenario_id":"TP04","scenario_type":"例外フロー(E01)の検証","desc":"「会員」 が無効になった"}]},"player":{"headers":[{"value":"player_id","text":"Player ID"},{"value":"desc","text":"説明"}],"items":[{"player_id":"U01","desc":"会員"}]},"pre_condition":{"headers":[{"value":"pre_condition_id","text":"ID"},{"value":"desc","text":"説明"}],"items":[{"pre_condition_id":"R01","desc":"「会員」 が登録されている"},{"pre_condition_id":"R02","desc":"「蔵書」 が登録されている"}]},"post_condition":{"headers":[{"value":"post_condition_id","text":"ID"},{"value":"desc","text":"説明"}],"items":[{"post_condition_id":"P01","desc":"「蔵書」 の貸出が予約されている"}]},"scenario_ids":["TP01","TP02","TP03","TP04"],"scenario_flows":[{"flow_id":"B01","on_scenario":["○","○","○","○"],"player_id":"U01","desc":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する","tooltips":"","branch_type":"none"},{"flow_id":"B02","on_scenario":["○"," ","○"," "],"player_id":"system","desc":"「蔵書」 を検索して一覧を表示する","tooltips":"基本フローの分岐点","branch_type":"branch"},{"flow_id":"A0101","on_scenario":[" ","○"," "," "],"player_id":"system","desc":"「検索条件にマッチする蔵書がない旨のエラーメッセージ」 を表示する","tooltips":"代替フローA01に分岐（検索条件にマッチする蔵書がない）","branch_type":"alt"},{"flow_id":"E0201","on_scenario":[" "," "," ","○"],"player_id":"system","desc":"「会員」 が無効になったため 「システムエラー(画面)」 を表示する","tooltips":"例外フローE01に分岐（「会員」 が無効になった）","branch_type":"ex"},{"flow_id":"B03","on_scenario":["○"," ","○"," "],"player_id":"U01","desc":"予約する 「蔵書」 を選択する","tooltips":"","branch_type":"none"},{"flow_id":"B04","on_scenario":["○"," ","○"," "],"player_id":"system","desc":"「貸出予約登録(画面)」 を表示する","tooltips":"","branch_type":"none"},{"flow_id":"B05","on_scenario":["○"," ","○"," "],"player_id":"U01","desc":"「貸出予約」 をエントリーする","tooltips":"","branch_type":"none"},{"flow_id":"B06","on_scenario":["○"," ","○"," "],"player_id":"system","desc":"「貸出予約」 を登録する","tooltips":"","branch_type":"none"},{"flow_id":"B07","on_scenario":["○"," "," "," "],"player_id":"system","desc":"「登録完了のメッセージ」 を表示する","tooltips":"基本フローの分岐点","branch_type":"branch"},{"flow_id":"A0201","on_scenario":[" "," ","○"," "],"player_id":"system","desc":"「先約があり予約できなかった旨のエラーメッセージ」 を表示する","tooltips":"代替フローA02に分岐（先にエントリーした人がいて予約が成立しなかった）","branch_type":"alt"},{"flow_id":"B08","on_scenario":["○"," "," "," "],"player_id":"system","desc":"「登録完了メール」 を送信する","tooltips":"","branch_type":"none"}],"data_scenarios":[{"valiation_id":"V01","valiation_title":"貸出予約の検証データ","step_link":"#V01_TP01","factors_text":"在庫有無 = 在庫あり","scenario_used":["○"," "," "," "]},{"valiation_id":"","valiation_title":"","step_link":"#V01_TP03","factors_text":"在庫有無 = 在庫切れ","scenario_used":[" "," ","○"," "]},{"valiation_id":"V02","valiation_title":"蔵書検索ヒット有無","step_link":"#V02_TP01","factors_text":"蔵書検索での検索条件 = マッチする蔵書がある","scenario_used":["○"," "," "," "]},{"valiation_id":"","valiation_title":"","step_link":"#V02_TP02","factors_text":"蔵書検索での検索条件 = マッチする蔵書がない","scenario_used":[" ","○"," "," "]},{"valiation_id":"V03","valiation_title":"会員抹消のデータ","step_link":"#V03_TP01","factors_text":"会員登録状態 = 登録済","scenario_used":["○"," "," "," "]},{"valiation_id":"","valiation_title":"","step_link":"#V03_TP04","factors_text":"会員登録状態 = 登録抹消","scenario_used":[" "," "," ","○"]}],"scenario_dtables":[{"valiation_id":"V01","valiation_title":"貸出予約の検証データ","scenario_id":"TP01","scenario_title":"正常に実行されて事後条件が成立する状態の検証","scenario_type":"基本フローの検証","step_link":"V01_TP01","countOfRules":1,"items":[{"step_colspan":6,"step_id":"【事前条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R01","operation_desc":"「会員」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R02","operation_desc":"「蔵書」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【手順】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B01","operation_desc":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B02","operation_desc":"","expected_desc":"「蔵書」 を検索して一覧を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B03","operation_desc":"予約する 「蔵書」 を選択する","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B04","operation_desc":"","expected_desc":"「貸出予約登録(画面)」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B05","operation_desc":"「貸出予約」 をエントリーする","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B06-1","operation_desc":"","expected_desc":"「貸出予約」 を登録する","factor_desc":"在庫有無","factor_select_item":"在庫あり","factor_select_rules":["Y"],"factor_colspan":1},{"step_colspan":1,"step_id":"B07","operation_desc":"","expected_desc":"「登録完了のメッセージ」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B08","operation_desc":"","expected_desc":"「登録完了メール」 を送信する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【事後条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"P0101","operation_desc":"","expected_desc":"貸出予約される","factor_desc":"「貸出予約」 が登録されている","factor_select_item":"","factor_select_rules":["X"],"factor_colspan":2},{"step_colspan":1,"step_id":"P0102","operation_desc":"","expected_desc":"","factor_desc":"「在庫」 の引当がされている","factor_select_item":"","factor_select_rules":["X"],"factor_colspan":2},{"step_colspan":1,"step_id":"P0103","operation_desc":"","expected_desc":"","factor_desc":"「登録完了メール」 が送信される","factor_select_item":"","factor_select_rules":["X"],"factor_colspan":2}]},{"valiation_id":"V01","valiation_title":"貸出予約の検証データ","scenario_id":"TP03","scenario_title":"先にエントリーした人がいて予約が成立しなかった","scenario_type":"代替フロー(A02)の検証","step_link":"V01_TP03","countOfRules":1,"items":[{"step_colspan":6,"step_id":"【事前条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R01","operation_desc":"「会員」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R02","operation_desc":"「蔵書」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【手順】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B01","operation_desc":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B02","operation_desc":"","expected_desc":"「蔵書」 を検索して一覧を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B03","operation_desc":"予約する 「蔵書」 を選択する","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B04","operation_desc":"","expected_desc":"「貸出予約登録(画面)」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B05","operation_desc":"「貸出予約」 をエントリーする","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B06-2","operation_desc":"","expected_desc":"「貸出予約」 を登録する","factor_desc":"在庫有無","factor_select_item":"在庫切れ","factor_select_rules":["Y"],"factor_colspan":1},{"step_colspan":1,"step_id":"A0201","operation_desc":"","expected_desc":"「先約があり予約できなかった旨のエラーメッセージ」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1}]},{"valiation_id":"V02","valiation_title":"蔵書検索ヒット有無","scenario_id":"TP01","scenario_title":"正常に実行されて事後条件が成立する状態の検証","scenario_type":"基本フローの検証","step_link":"V02_TP01","countOfRules":1,"items":[{"step_colspan":6,"step_id":"【事前条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R01","operation_desc":"「会員」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R02","operation_desc":"「蔵書」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【手順】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B01-1","operation_desc":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する","expected_desc":"","factor_desc":"蔵書検索での検索条件","factor_select_item":"マッチする蔵書がある","factor_select_rules":["Y"],"factor_colspan":1},{"step_colspan":1,"step_id":"B02","operation_desc":"","expected_desc":"「蔵書」 を検索して一覧を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B03","operation_desc":"予約する 「蔵書」 を選択する","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B04","operation_desc":"","expected_desc":"「貸出予約登録(画面)」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B05","operation_desc":"「貸出予約」 をエントリーする","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B06","operation_desc":"","expected_desc":"「貸出予約」 を登録する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B07","operation_desc":"","expected_desc":"「登録完了のメッセージ」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B08","operation_desc":"","expected_desc":"「登録完了メール」 を送信する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【事後条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"P01","operation_desc":"","expected_desc":"検索ヒットして貸出予約","factor_desc":"「蔵書」 の貸出が予約されている","factor_select_item":"","factor_select_rules":["X"],"factor_colspan":2}]},{"valiation_id":"V02","valiation_title":"蔵書検索ヒット有無","scenario_id":"TP02","scenario_title":"検索条件にマッチする蔵書がない","scenario_type":"代替フロー(A01)の検証","step_link":"V02_TP02","countOfRules":1,"items":[{"step_colspan":6,"step_id":"【事前条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R01","operation_desc":"「会員」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R02","operation_desc":"「蔵書」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【手順】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B01-2","operation_desc":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する","expected_desc":"","factor_desc":"蔵書検索での検索条件","factor_select_item":"マッチする蔵書がない","factor_select_rules":["Y"],"factor_colspan":1},{"step_colspan":1,"step_id":"A0101","operation_desc":"","expected_desc":"「検索条件にマッチする蔵書がない旨のエラーメッセージ」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1}]},{"valiation_id":"V03","valiation_title":"会員抹消のデータ","scenario_id":"TP01","scenario_title":"正常に実行されて事後条件が成立する状態の検証","scenario_type":"基本フローの検証","step_link":"V03_TP01","countOfRules":1,"items":[{"step_colspan":6,"step_id":"【事前条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R01-1","operation_desc":"「会員」 が登録されている","expected_desc":"","factor_desc":"会員登録状態","factor_select_item":"登録済","factor_select_rules":["Y"],"factor_colspan":1},{"step_colspan":1,"step_id":"R02","operation_desc":"「蔵書」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【手順】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B01","operation_desc":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B02","operation_desc":"","expected_desc":"「蔵書」 を検索して一覧を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B03","operation_desc":"予約する 「蔵書」 を選択する","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B04","operation_desc":"","expected_desc":"「貸出予約登録(画面)」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B05","operation_desc":"「貸出予約」 をエントリーする","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B06","operation_desc":"","expected_desc":"「貸出予約」 を登録する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B07","operation_desc":"","expected_desc":"「登録完了のメッセージ」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B08","operation_desc":"","expected_desc":"「登録完了メール」 を送信する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【事後条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"P01","operation_desc":"","expected_desc":"会員が有効なときは貸出予約可能","factor_desc":"「蔵書」 の貸出が予約されている","factor_select_item":"","factor_select_rules":["X"],"factor_colspan":2}]},{"valiation_id":"V03","valiation_title":"会員抹消のデータ","scenario_id":"TP04","scenario_title":"「会員」 が無効になった","scenario_type":"例外フロー(E01)の検証","step_link":"V03_TP04","countOfRules":1,"items":[{"step_colspan":6,"step_id":"【事前条件】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"R01-2","operation_desc":"「会員」 が登録されている","expected_desc":"","factor_desc":"会員登録状態","factor_select_item":"登録抹消","factor_select_rules":["Y"],"factor_colspan":1},{"step_colspan":1,"step_id":"R02","operation_desc":"「蔵書」 が登録されている","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":6,"step_id":"【手順】","operation_desc":"","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"B01","operation_desc":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する","expected_desc":"","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1},{"step_colspan":1,"step_id":"E0201","operation_desc":"","expected_desc":"「会員」 が無効になったため 「システムエラー(画面)」 を表示する","factor_desc":"","factor_select_item":"","factor_select_rules":[" "],"factor_colspan":1}]}],"uc":{"id":{"text":"UC01"},"name":{"text":"貸出本の予約する"},"summary":{"text":"Webで借りたい本を探して予約する\n"},"preConditions":[{"id":{"text":"R01"},"description":{"text":"「会員」 が登録されている"},"_details":[]},{"id":{"text":"R02"},"description":{"text":"「蔵書」 が登録されている"},"_details":[]}],"postConditions":[{"id":{"text":"P01"},"description":{"text":"「蔵書」 の貸出が予約されている"},"_details":[{"id":{"text":"P0101"},"description":{"text":"「貸出予約」 が登録されている"},"_details":[],"_testCover":true},{"id":{"text":"P0102"},"description":{"text":"「在庫」 の引当がされている"},"_details":[],"_testCover":true},{"id":{"text":"P0103"},"description":{"text":"「登録完了メール」 が送信される"},"_details":[],"_testCover":true}],"_testCover":true}],"basicFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B08"},"description":{"text":"「登録完了メール」 を送信する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"alternateFlows":{"items":[{"id":{"text":"A01"},"description":{"text":"検索条件にマッチする蔵書がない"},"overrideFlows":[{"basicFlow":{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},"replaceFlows":{"items":[{"id":{"text":"A0101"},"description":{"text":"「検索条件にマッチする蔵書がない旨のエラーメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"returnFlow":{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true}}],"basicFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B08"},"description":{"text":"「登録完了メール」 を送信する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"_testCover":true,"mergedFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"A0101"},"description":{"text":"「検索条件にマッチする蔵書がない旨のエラーメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}}},{"id":{"text":"A02"},"description":{"text":"先にエントリーした人がいて予約が成立しなかった"},"overrideFlows":[{"basicFlow":{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},"replaceFlows":{"items":[{"id":{"text":"A0201"},"description":{"text":"「先約があり予約できなかった旨のエラーメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"returnFlow":{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true}}],"basicFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B08"},"description":{"text":"「登録完了メール」 を送信する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"_testCover":true,"mergedFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"A0201"},"description":{"text":"「先約があり予約できなかった旨のエラーメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}}}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"exceptionFlows":{"items":[{"id":{"text":"E01"},"description":{"text":"「会員」 が無効になった"},"overrideFlows":[{"basicFlow":{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},"replaceFlows":{"items":[{"id":{"text":"E0201"},"description":{"text":"「会員」 が無効になったため 「システムエラー(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}}}],"basicFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B08"},"description":{"text":"「登録完了メール」 を送信する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"_testCover":true,"mergedFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"E0201"},"description":{"text":"「会員」 が無効になったため 「システムエラー(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}}}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"valiations":[{"id":{"text":"V01"},"description":{"text":"貸出予約の検証データ"},"factorEntryPoint":{"_entryPoints":{},"_factors":{},"_ommitLevels":{}},"pict":{"factorEntryPoint":{"_entryPoints":{},"_factors":{},"_ommitLevels":{}},"pictConstraint":{"text":""},"combination":{}},"results":{"_results":[{"id":{"text":"VR0101"},"desc":{"text":"貸出予約される"},"choices":{"_choices":[{"factor":{"id":{"text":"在庫有無"},"name":{"text":"在庫有無"},"levels":[{"text":"在庫あり"},{"text":"在庫切れ"}]},"level":{"text":"在庫あり"}}]},"verificationPoints":[{"id":{"text":"P0101"},"description":{"text":"「貸出予約」 が登録されている"},"_details":[],"_testCover":true},{"id":{"text":"P0102"},"description":{"text":"「在庫」 の引当がされている"},"_details":[],"_testCover":true},{"id":{"text":"P0103"},"description":{"text":"「登録完了メール」 が送信される"},"_details":[],"_testCover":true}]},{"id":{"text":"VR0102"},"desc":{"text":"予約できない"},"choices":{"_choices":[{"factor":{"id":{"text":"在庫有無"},"name":{"text":"在庫有無"},"levels":[{"text":"在庫あり"},{"text":"在庫切れ"}]},"level":{"text":"在庫切れ"}}]},"verificationPoints":[{"id":{"text":"A02"},"description":{"text":"先にエントリーした人がいて予約が成立しなかった"},"overrideFlows":[{"basicFlow":{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},"replaceFlows":{"items":[{"id":{"text":"A0201"},"description":{"text":"「先約があり予約できなかった旨のエラーメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"returnFlow":{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true}}],"basicFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B08"},"description":{"text":"「登録完了メール」 を送信する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"_testCover":true,"mergedFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"A0201"},"description":{"text":"「先約があり予約できなかった旨のエラーメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}}}]}]}},{"id":{"text":"V02"},"description":{"text":"蔵書検索ヒット有無"},"factorEntryPoint":{"_entryPoints":{},"_factors":{},"_ommitLevels":{}},"pict":{"factorEntryPoint":{"_entryPoints":{},"_factors":{},"_ommitLevels":{}},"pictConstraint":{"text":""},"combination":{}},"results":{"_results":[{"id":{"text":"VR0201"},"desc":{"text":"検索ヒットして貸出予約"},"choices":{"_choices":[{"factor":{"id":{"text":"蔵書検索での検索条件"},"name":{"text":"蔵書検索での検索条件"},"levels":[{"text":"マッチする蔵書がある"},{"text":"マッチする蔵書がない"}]},"level":{"text":"マッチする蔵書がある"}}]},"verificationPoints":[{"id":{"text":"P01"},"description":{"text":"「蔵書」 の貸出が予約されている"},"_details":[{"id":{"text":"P0101"},"description":{"text":"「貸出予約」 が登録されている"},"_details":[],"_testCover":true},{"id":{"text":"P0102"},"description":{"text":"「在庫」 の引当がされている"},"_details":[],"_testCover":true},{"id":{"text":"P0103"},"description":{"text":"「登録完了メール」 が送信される"},"_details":[],"_testCover":true}],"_testCover":true}]},{"id":{"text":"VR0202"},"desc":{"text":"検索ヒットしない"},"choices":{"_choices":[{"factor":{"id":{"text":"蔵書検索での検索条件"},"name":{"text":"蔵書検索での検索条件"},"levels":[{"text":"マッチする蔵書がある"},{"text":"マッチする蔵書がない"}]},"level":{"text":"マッチする蔵書がない"}}]},"verificationPoints":[{"id":{"text":"A01"},"description":{"text":"検索条件にマッチする蔵書がない"},"overrideFlows":[{"basicFlow":{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},"replaceFlows":{"items":[{"id":{"text":"A0101"},"description":{"text":"「検索条件にマッチする蔵書がない旨のエラーメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"returnFlow":{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true}}],"basicFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B08"},"description":{"text":"「登録完了メール」 を送信する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"_testCover":true,"mergedFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"A0101"},"description":{"text":"「検索条件にマッチする蔵書がない旨のエラーメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}}}]}]}},{"id":{"text":"V03"},"description":{"text":"会員抹消のデータ"},"factorEntryPoint":{"_entryPoints":{},"_factors":{},"_ommitLevels":{}},"pict":{"factorEntryPoint":{"_entryPoints":{},"_factors":{},"_ommitLevels":{}},"pictConstraint":{"text":""},"combination":{}},"results":{"_results":[{"id":{"text":"VR0301"},"desc":{"text":"会員が有効なときは貸出予約可能"},"choices":{"_choices":[{"factor":{"id":{"text":"会員登録状態"},"name":{"text":"会員登録状態"},"levels":[{"text":"登録済"},{"text":"登録抹消"}]},"level":{"text":"登録済"}}]},"verificationPoints":[{"id":{"text":"P01"},"description":{"text":"「蔵書」 の貸出が予約されている"},"_details":[{"id":{"text":"P0101"},"description":{"text":"「貸出予約」 が登録されている"},"_details":[],"_testCover":true},{"id":{"text":"P0102"},"description":{"text":"「在庫」 の引当がされている"},"_details":[],"_testCover":true},{"id":{"text":"P0103"},"description":{"text":"「登録完了メール」 が送信される"},"_details":[],"_testCover":true}],"_testCover":true}]},{"id":{"text":"VR0302"},"desc":{"text":"会員が無効化したときにエラーになる"},"choices":{"_choices":[{"factor":{"id":{"text":"会員登録状態"},"name":{"text":"会員登録状態"},"levels":[{"text":"登録済"},{"text":"登録抹消"}]},"level":{"text":"登録抹消"}}]},"verificationPoints":[{"id":{"text":"E01"},"description":{"text":"「会員」 が無効になった"},"overrideFlows":[{"basicFlow":{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},"replaceFlows":{"items":[{"id":{"text":"E0201"},"description":{"text":"「会員」 が無効になったため 「システムエラー(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}}}],"basicFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B02"},"description":{"text":"「蔵書」 を検索して一覧を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B03"},"description":{"text":"予約する 「蔵書」 を選択する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B04"},"description":{"text":"「貸出予約登録(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B05"},"description":{"text":"「貸出予約」 をエントリーする"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B06"},"description":{"text":"「貸出予約」 を登録する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false},{"id":{"text":"B07"},"description":{"text":"「登録完了のメッセージ」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"B08"},"description":{"text":"「登録完了メール」 を送信する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}},"_testCover":true,"mergedFlows":{"items":[{"id":{"text":"B01"},"description":{"text":"「蔵書検索(画面)」 で検索条件を入力し、検索を実行する"},"player":{"id":{"text":"U01"},"name":{"text":"会員"}},"_refFlows":{},"_hasBackLink":true},{"id":{"text":"E0201"},"description":{"text":"「会員」 が無効になったため 「システムエラー(画面)」 を表示する"},"player":{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},"_refFlows":{},"_hasBackLink":false}],"_flows":{"_cache":{}},"_actors":{},"_players":{}}}]}]}}],"glossaries":{"items":[{"id":{"text":"BR01"},"category":{"text":"ビジネスルール"},"name":{"text":"蔵書の在庫管理"},"desc":{"text":"蔵書の在庫管理"}},{"id":{"text":"会員"},"category":{"text":"エンティティ"},"name":{"text":"会員"},"desc":{"text":"会員"}},{"id":{"text":"蔵書"},"category":{"text":"エンティティ"},"name":{"text":"蔵書"},"desc":{"text":"蔵書"}},{"id":{"text":"貸出予約"},"category":{"text":"エンティティ"},"name":{"text":"貸出予約"},"desc":{"text":"貸出予約"}},{"id":{"text":"在庫"},"category":{"text":"エンティティ"},"name":{"text":"在庫"},"desc":{"text":"在庫"}},{"id":{"text":"登録完了メール"},"category":{"text":"メール"},"name":{"text":"登録完了メール"},"desc":{"text":"登録完了メール"}},{"id":{"text":"蔵書検索(画面)"},"category":{"text":"画面"},"name":{"text":"蔵書検索(画面)"},"desc":{"text":"蔵書検索(画面)"}},{"id":{"text":"system"},"category":{"text":"その他"},"name":{"text":"system"},"desc":{"text":"システム"}},{"id":{"text":"貸出予約登録(画面)"},"category":{"text":"画面"},"name":{"text":"貸出予約登録(画面)"},"desc":{"text":"貸出予約登録(画面)"}},{"id":{"text":"登録完了のメッセージ"},"category":{"text":"メッセージ"},"name":{"text":"登録完了のメッセージ"},"desc":{"text":"登録完了のメッセージ"}},{"id":{"text":"検索条件にマッチする蔵書がない旨のエラーメッセージ"},"category":{"text":"メッセージ"},"name":{"text":"検索条件にマッチする蔵書がない旨のエラーメッセージ"},"desc":{"text":"検索条件にマッチする蔵書がない旨のエラーメッセージ"}},{"id":{"text":"先約があり予約できなかった旨のエラーメッセージ"},"category":{"text":"メッセージ"},"name":{"text":"先約があり予約できなかった旨のエラーメッセージ"},"desc":{"text":"先約があり予約できなかった旨のエラーメッセージ"}},{"id":{"text":"システムエラー(画面)"},"category":{"text":"画面"},"name":{"text":"システムエラー(画面)"},"desc":{"text":"システムエラー(画面)"}}],"_categorizedGlossaries":{},"_glossaries":{"_cache":{}}},"_preConditions":{"_cache":{}},"_postConditions":{"_cache":{}},"_errorMessages":[]}},
+        };
+      },
+    })
+  </script>
+</body>
+
+</html>
+

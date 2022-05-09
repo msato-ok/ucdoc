@@ -116,6 +116,17 @@ export class UcScenarioCollection {
     return this._ucScenarios;
   }
 
+  indexOfScenario(ucScenario: UcScenario): number {
+    let index = 0;
+    for (const ucs of this._ucScenarios) {
+      if (ucScenario.equals(ucs)) {
+        return index;
+      }
+      index++;
+    }
+    return -1;
+  }
+
   getBranchType(flow: Flow): string {
     const scenarios = this.getScenariosByFLow(flow);
     if (scenarios.length == 0) {
